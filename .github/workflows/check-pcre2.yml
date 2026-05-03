@@ -1,0 +1,62 @@
+name: Check PCRE2 Updates
+
+on:
+  schedule:
+    - cron: '0 9 * * 1'  # Every Monday at 9am UTC
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get versions
+        id: versions
+        run: |
+          LATEST=$(curl -s "https://api.github.com/repos/PCRE2Project/pcre2/releases/latest" \
+            -H "Authorization: Bearer ${{ github.token }}" \
+            | jq -r '.tag_name' | sed 's/pcre2-//')
+          CURRENT=$(grep 'PCRE2_VERSION' Makefile | grep -oE '[0-9]+\.[0-9]+')
+          echo "latest=$LATEST" >> $GITHUB_OUTPUT
+          echo "current=$CURRENT" >> $GITHUB_OUTPUT
+          if [ "$LATEST" != "$CURRENT" ]; then
+            echo "needs_update=true" >> $GITHUB_OUTPUT
+          else
+            echo "needs_update=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Update files
+        if: steps.versions.outputs.needs_update == 'true'
+        run: |
+          LATEST="${{ steps.versions.outputs.latest }}"
+          sed -i "s/PCRE2_VERSION := .*/PCRE2_VERSION := $LATEST/" Makefile
+          node -e "
+            const fs = require('fs');
+            const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+            pkg.version = '$LATEST.0';
+            fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
+          "
+
+      - name: Create Pull Request
+        if: steps.versions.outputs.needs_update == 'true'
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ github.token }}
+          branch: update/pcre2-${{ steps.versions.outputs.latest }}
+          commit-message: "chore: update PCRE2 ${{ steps.versions.outputs.current }} → ${{ steps.versions.outputs.latest }}"
+          title: "chore: update PCRE2 ${{ steps.versions.outputs.current }} → ${{ steps.versions.outputs.latest }}"
+          body: |
+            Automated PCRE2 version update.
+
+            - **Previous:** `${{ steps.versions.outputs.current }}`
+            - **New:** `${{ steps.versions.outputs.latest }}`
+
+            [Release notes](https://github.com/PCRE2Project/pcre2/releases/tag/pcre2-${{ steps.versions.outputs.latest }})
+
+            Merging will automatically create tag `v${{ steps.versions.outputs.latest }}.0` and publish to npm.
+          labels: dependencies
