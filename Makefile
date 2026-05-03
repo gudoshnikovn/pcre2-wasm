@@ -17,8 +17,8 @@ EMCC_FLAGS := \
 	-s EXPORT_NAME=PCRE2Module \
 	-s EXPORT_ES6=1 \
 	-s SINGLE_FILE=1 \
-	-s EXPORTED_FUNCTIONS='["_malloc","_free","_pcre2_wasm_compile","_pcre2_wasm_match","_pcre2_wasm_match_all","_pcre2_wasm_free"]' \
-	-s EXPORTED_RUNTIME_METHODS='["cwrap","ccall","UTF8ToString","getValue"]' \
+	-s EXPORTED_FUNCTIONS='["_malloc","_free","_pcre2_wasm_compile","_pcre2_wasm_match","_pcre2_wasm_match_all","_pcre2_wasm_replace","_pcre2_wasm_free"]' \
+	-s EXPORTED_RUNTIME_METHODS='["cwrap","ccall","UTF8ToString","getValue","stringToUTF8","lengthBytesUTF8"]' \
 	-s ALLOW_MEMORY_GROWTH=1 \
 	-s ENVIRONMENT='web,node' \
 	--no-entry \

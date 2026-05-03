@@ -5,24 +5,130 @@
 #include <stdio.h>
 #include "pcre2.h"
 
-static uint32_t json_write_escaped(char* buf, uint32_t pos, uint32_t max,
-                                    const char* src, uint32_t len) {
-    for (uint32_t i = 0; i < len; i++) {
-        if (pos + 7 >= max) break;
-        unsigned char c = (unsigned char)src[i];
-        if      (c == '"')  { buf[pos++] = '\\'; buf[pos++] = '"';  }
-        else if (c == '\\') { buf[pos++] = '\\'; buf[pos++] = '\\'; }
-        else if (c == '\n') { buf[pos++] = '\\'; buf[pos++] = 'n';  }
-        else if (c == '\r') { buf[pos++] = '\\'; buf[pos++] = 'r';  }
-        else if (c == '\t') { buf[pos++] = '\\'; buf[pos++] = 't';  }
-        else if (c < 0x20)  { pos += snprintf(buf + pos, max - pos, "\\u%04x", c); }
-        else                { buf[pos++] = (char)c; }
-    }
-    return pos;
+/* ── JSON write helpers ─────────────────────────────────────────────────── */
+
+typedef struct {
+    char*    buf;
+    uint32_t pos;
+    uint32_t max;
+    int      overflow;
+} JsonBuf;
+
+static void jb_char(JsonBuf* b, char c) {
+    if (!b->buf || b->overflow || b->pos + 2 >= b->max) { b->overflow = 1; return; }
+    b->buf[b->pos++] = c;
 }
 
-// Returns compiled regex pointer, or 0 on error.
-// error_buf must be >= 256 bytes, error_offset is output param.
+static void jb_raw(JsonBuf* b, const char* s, uint32_t len) {
+    for (uint32_t i = 0; i < len; i++) jb_char(b, s[i]);
+}
+
+static void jb_lit(JsonBuf* b, const char* s) {
+    jb_raw(b, s, (uint32_t)strlen(s));
+}
+
+static void jb_uint(JsonBuf* b, uint32_t n) {
+    char tmp[12];
+    jb_raw(b, tmp, (uint32_t)snprintf(tmp, sizeof(tmp), "%u", n));
+}
+
+static void jb_string(JsonBuf* b, const char* src, uint32_t len) {
+    jb_char(b, '"');
+    for (uint32_t i = 0; i < len; i++) {
+        if (b->overflow) return;
+        unsigned char c = (unsigned char)src[i];
+        if      (c == '"')  { jb_char(b, '\\'); jb_char(b, '"');  }
+        else if (c == '\\') { jb_char(b, '\\'); jb_char(b, '\\'); }
+        else if (c == '\n') { jb_char(b, '\\'); jb_char(b, 'n');  }
+        else if (c == '\r') { jb_char(b, '\\'); jb_char(b, 'r');  }
+        else if (c == '\t') { jb_char(b, '\\'); jb_char(b, 't');  }
+        else if (c < 0x20)  {
+            char tmp[8];
+            jb_raw(b, tmp, (uint32_t)snprintf(tmp, sizeof(tmp), "\\u%04x", c));
+        }
+        else { jb_char(b, c); }
+    }
+    jb_char(b, '"');
+}
+
+/* ── Name-table cache ───────────────────────────────────────────────────── */
+
+typedef struct {
+    uint32_t     namecount;
+    uint32_t     entry_size;   /* bytes per entry                           */
+    PCRE2_SPTR   table;        /* points into compiled code; not owned      */
+} NameTable;
+
+static void nt_load(pcre2_code* re, NameTable* nt) {
+    nt->namecount  = 0;
+    nt->entry_size = 0;
+    nt->table      = NULL;
+    pcre2_pattern_info(re, PCRE2_INFO_NAMECOUNT,     &nt->namecount);
+    if (nt->namecount == 0) return;
+    pcre2_pattern_info(re, PCRE2_INFO_NAMEENTRYSIZE, &nt->entry_size);
+    pcre2_pattern_info(re, PCRE2_INFO_NAMETABLE,     &nt->table);
+}
+
+/* ── Core: write one match as a JSON object ─────────────────────────────── */
+
+static void jb_match_object(JsonBuf* b, const char* subject,
+                             PCRE2_SIZE* ov, int rc, const NameTable* nt) {
+    jb_char(b, '{');
+
+    /* "match":"..." */
+    jb_lit(b, "\"match\":");
+    jb_string(b, subject + ov[0], (uint32_t)(ov[1] - ov[0]));
+
+    /* ,"index":N */
+    jb_lit(b, ",\"index\":");
+    jb_uint(b, (uint32_t)ov[0]);
+
+    /* ,"groups":[...] — numbered capture groups, starting at 1 */
+    jb_lit(b, ",\"groups\":[");
+    for (int i = 1; i < rc; i++) {
+        if (i > 1) jb_char(b, ',');
+        if (ov[2*i] == PCRE2_UNSET) {
+            jb_lit(b, "null");
+        } else {
+            jb_string(b, subject + ov[2*i], (uint32_t)(ov[2*i+1] - ov[2*i]));
+        }
+    }
+    jb_char(b, ']');
+
+    /* ,"namedGroups":{...} — omitted entirely when no named groups */
+    if (nt->namecount > 0) {
+        jb_lit(b, ",\"namedGroups\":{");
+        for (uint32_t ni = 0; ni < nt->namecount; ni++) {
+            if (ni > 0) jb_char(b, ',');
+            const unsigned char* e =
+                (const unsigned char*)((const char*)nt->table + ni * nt->entry_size);
+            uint32_t gn = ((uint32_t)e[0] << 8) | e[1];
+            const char* name = (const char*)(e + 2);
+
+            jb_string(b, name, (uint32_t)strlen(name));
+            jb_char(b, ':');
+
+            /* gn is a valid index into ov even if >= rc: create_from_pattern
+               allocates enough slots and fills them with PCRE2_UNSET */
+            PCRE2_SIZE gs = ov[2*gn], ge = ov[2*gn+1];
+            if (gs == PCRE2_UNSET) {
+                jb_lit(b, "null");
+            } else {
+                jb_string(b, subject + gs, (uint32_t)(ge - gs));
+            }
+        }
+        jb_char(b, '}');
+    }
+
+    jb_char(b, '}');
+}
+
+/* ── Public API ─────────────────────────────────────────────────────────── */
+
+/*
+ * Compile a pattern. Returns compiled code pointer or NULL on error.
+ * error_buf must be >= 256 bytes; error_offset receives the error position.
+ */
 EMSCRIPTEN_KEEPALIVE
 pcre2_code* pcre2_wasm_compile(const char* pattern, uint32_t flags,
                                 char* error_buf, uint32_t* error_offset) {
@@ -39,8 +145,16 @@ pcre2_code* pcre2_wasm_compile(const char* pattern, uint32_t flags,
     return re;
 }
 
-// Returns number of matches (>0), -1 for no match, <-1 for error.
-// match_buf receives null-terminated JSON array of matches: ["m0","m1",...]
+/*
+ * First match. Returns:
+ *   > 0  match found; match_buf contains JSON object
+ *   -1   no match
+ *   -2   match_buf too small — retry with a larger buffer
+ *   < -2 PCRE2 error
+ *
+ * JSON format: {"match":"...","index":N,"groups":[...],"namedGroups":{...}}
+ * namedGroups is omitted when the pattern has no named groups.
+ */
 EMSCRIPTEN_KEEPALIVE
 int pcre2_wasm_match(pcre2_code* re, const char* subject,
                      char* match_buf, uint32_t match_buf_size) {
@@ -53,29 +167,32 @@ int pcre2_wasm_match(pcre2_code* re, const char* subject,
     int rc = pcre2_match(re, (PCRE2_SPTR)subject, subj_len, 0, 0, md, NULL);
 
     if (rc > 0 && match_buf && match_buf_size > 2) {
-        PCRE2_SIZE* ovector = pcre2_get_ovector_pointer(md);
-        uint32_t pos = 0;
-        match_buf[pos++] = '[';
-        for (int i = 0; i < rc; i++) {
-            if (i > 0 && pos < match_buf_size - 1) match_buf[pos++] = ',';
-            PCRE2_SIZE start = ovector[2 * i];
-            PCRE2_SIZE end   = ovector[2 * i + 1];
-            uint32_t len = (uint32_t)(end - start);
-            if (pos + len + 4 >= match_buf_size) break;
-            match_buf[pos++] = '"';
-            pos = json_write_escaped(match_buf, pos, match_buf_size - 2, subject + start, len);
-            match_buf[pos++] = '"';
+        NameTable nt;
+        nt_load(re, &nt);
+        JsonBuf b = { match_buf, 0, match_buf_size, 0 };
+        jb_match_object(&b, subject, pcre2_get_ovector_pointer(md), rc, &nt);
+        if (b.overflow) {
+            pcre2_match_data_free(md);
+            return -2;
         }
-        if (pos < match_buf_size - 1) match_buf[pos++] = ']';
-        match_buf[pos] = '\0';
+        b.buf[b.pos] = '\0';
     }
 
     pcre2_match_data_free(md);
     return rc;
 }
 
-// Global search — finds all non-overlapping matches, returns count.
-// match_buf receives JSON array of all full matches: ["m1","m2",...]
+/*
+ * Global search — finds all non-overlapping matches. Returns:
+ *   >= 0  number of matches; match_buf contains JSON array of match objects
+ *   -2    match_buf too small — retry with a larger buffer
+ *   < -2  PCRE2 error
+ *
+ * Passing match_buf=0 / match_buf_size=0 is valid: counts matches without
+ * writing JSON (used by test()).
+ *
+ * JSON format: [{"match":"...","index":N,"groups":[...]},...]
+ */
 EMSCRIPTEN_KEEPALIVE
 int pcre2_wasm_match_all(pcre2_code* re, const char* subject,
                           char* match_buf, uint32_t match_buf_size) {
@@ -85,39 +202,75 @@ int pcre2_wasm_match_all(pcre2_code* re, const char* subject,
     pcre2_match_data* md = pcre2_match_data_create_from_pattern(re, NULL);
     if (!md) return -48;
 
-    uint32_t pos = 0;
+    int write_json = (match_buf != NULL && match_buf_size > 2);
+    NameTable nt;
+    if (write_json) nt_load(re, &nt);
+
+    JsonBuf b = { match_buf, 0, match_buf_size, 0 };
+    if (write_json) jb_char(&b, '[');
+
     int total = 0;
     PCRE2_SIZE offset = 0;
-
-    if (match_buf && match_buf_size > 2) match_buf[pos++] = '[';
 
     while (offset <= subj_len) {
         int rc = pcre2_match(re, (PCRE2_SPTR)subject, subj_len, offset, 0, md, NULL);
         if (rc <= 0) break;
 
-        PCRE2_SIZE* ovector = pcre2_get_ovector_pointer(md);
-        PCRE2_SIZE start = ovector[0];
-        PCRE2_SIZE end   = ovector[1];
-        uint32_t len = (uint32_t)(end - start);
+        PCRE2_SIZE* ov = pcre2_get_ovector_pointer(md);
+        PCRE2_SIZE  start = ov[0], end = ov[1];
 
-        if (match_buf && pos + len + 5 < match_buf_size) {
-            if (total > 0) match_buf[pos++] = ',';
-            match_buf[pos++] = '"';
-            pos = json_write_escaped(match_buf, pos, match_buf_size - 2, subject + start, len);
-            match_buf[pos++] = '"';
+        if (write_json) {
+            if (total > 0) jb_char(&b, ',');
+            jb_match_object(&b, subject, ov, rc, &nt);
+            if (b.overflow) {
+                pcre2_match_data_free(md);
+                return -2;
+            }
         }
 
         total++;
         offset = (end > start) ? end : end + 1;
     }
 
-    if (match_buf && match_buf_size > 2) {
-        match_buf[pos++] = ']';
-        match_buf[pos] = '\0';
+    if (write_json) {
+        jb_char(&b, ']');
+        b.buf[b.pos] = '\0';
     }
 
     pcre2_match_data_free(md);
     return total;
+}
+
+/*
+ * Regex-based string replacement using pcre2_substitute (extended mode).
+ * Replacement syntax: $0 or $& = whole match, $1..$n = numbered groups,
+ * ${name} = named group, $$ = literal dollar.
+ *
+ * Returns:
+ *   >= 0  number of substitutions; out_buf contains the result string
+ *   -2    out_buf too small — retry with a larger buffer
+ *   < -2  PCRE2 error
+ */
+EMSCRIPTEN_KEEPALIVE
+int pcre2_wasm_replace(pcre2_code* re, const char* subject,
+                        const char* replacement, int global,
+                        char* out_buf, uint32_t out_buf_size) {
+    if (!re || !subject || !replacement || !out_buf) return -1;
+
+    PCRE2_SIZE out_len = (PCRE2_SIZE)out_buf_size;
+    uint32_t opts = PCRE2_SUBSTITUTE_EXTENDED | PCRE2_SUBSTITUTE_OVERFLOW_LENGTH;
+    if (global) opts |= PCRE2_SUBSTITUTE_GLOBAL;
+
+    int rc = pcre2_substitute(
+        re,
+        (PCRE2_SPTR)subject, PCRE2_ZERO_TERMINATED,
+        0, opts,
+        NULL, NULL,
+        (PCRE2_SPTR)replacement, PCRE2_ZERO_TERMINATED,
+        (PCRE2_UCHAR*)out_buf, &out_len
+    );
+
+    return (rc == PCRE2_ERROR_NOMEMORY) ? -2 : rc;
 }
 
 EMSCRIPTEN_KEEPALIVE
