@@ -18,7 +18,8 @@
   "files": [
     "dist/",
     "lib/",
-    "js/"
+    "js/",
+    "NOTICE"
   ],
   "scripts": {
     "build": "make build",
