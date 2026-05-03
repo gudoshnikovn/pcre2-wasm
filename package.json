@@ -34,6 +34,10 @@
     "pcre"
   ],
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/gudoshnikovn/pcre2-wasm"
+  },
   "peerDependencies": {
     "react": ">=17.0.0"
   },
