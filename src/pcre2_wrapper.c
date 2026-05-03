@@ -2,7 +2,24 @@
 #include <emscripten.h>
 #include <string.h>
 #include <stdlib.h>
+#include <stdio.h>
 #include "pcre2.h"
+
+static uint32_t json_write_escaped(char* buf, uint32_t pos, uint32_t max,
+                                    const char* src, uint32_t len) {
+    for (uint32_t i = 0; i < len; i++) {
+        if (pos + 7 >= max) break;
+        unsigned char c = (unsigned char)src[i];
+        if      (c == '"')  { buf[pos++] = '\\'; buf[pos++] = '"';  }
+        else if (c == '\\') { buf[pos++] = '\\'; buf[pos++] = '\\'; }
+        else if (c == '\n') { buf[pos++] = '\\'; buf[pos++] = 'n';  }
+        else if (c == '\r') { buf[pos++] = '\\'; buf[pos++] = 'r';  }
+        else if (c == '\t') { buf[pos++] = '\\'; buf[pos++] = 't';  }
+        else if (c < 0x20)  { pos += snprintf(buf + pos, max - pos, "\\u%04x", c); }
+        else                { buf[pos++] = (char)c; }
+    }
+    return pos;
+}
 
 // Returns compiled regex pointer, or 0 on error.
 // error_buf must be >= 256 bytes, error_offset is output param.
@@ -46,8 +63,7 @@ int pcre2_wasm_match(pcre2_code* re, const char* subject,
             uint32_t len = (uint32_t)(end - start);
             if (pos + len + 4 >= match_buf_size) break;
             match_buf[pos++] = '"';
-            memcpy(match_buf + pos, subject + start, len);
-            pos += len;
+            pos = json_write_escaped(match_buf, pos, match_buf_size - 2, subject + start, len);
             match_buf[pos++] = '"';
         }
         if (pos < match_buf_size - 1) match_buf[pos++] = ']';
@@ -87,8 +103,7 @@ int pcre2_wasm_match_all(pcre2_code* re, const char* subject,
         if (match_buf && pos + len + 5 < match_buf_size) {
             if (total > 0) match_buf[pos++] = ',';
             match_buf[pos++] = '"';
-            memcpy(match_buf + pos, subject + start, len);
-            pos += len;
+            pos = json_write_escaped(match_buf, pos, match_buf_size - 2, subject + start, len);
             match_buf[pos++] = '"';
         }
 
