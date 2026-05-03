@@ -1,0 +1,6 @@
+emsdk/
+pcre2/
+build/
+dist/
+.DS_Store
+node_modules/
