@@ -15,15 +15,31 @@ export interface PCRE2Match {
  * PCRE2 flag constants. Combine with bitwise OR: FLAGS.CASELESS | FLAGS.MULTILINE
  */
 export declare const FLAGS: {
-  readonly CASELESS:        0x00000008;
-  readonly MULTILINE:       0x00000400;
-  readonly DOTALL:          0x00000020;
-  readonly EXTENDED:        0x00000080;
-  readonly UTF:             0x00080000;
-  readonly ANCHORED:        0x80000000;
-  readonly UNGREEDY:        0x00040000;
-  readonly NO_AUTO_CAPTURE: 0x00002000;
-  readonly EXTENDED_MORE:   0x01000000;
+  readonly CASELESS:          0x00000008;
+  readonly MULTILINE:         0x00000400;
+  readonly DOTALL:            0x00000020;
+  readonly EXTENDED:          0x00000080;
+  readonly EXTENDED_MORE:     0x01000000;
+  readonly UTF:               0x00080000;
+  /** Use Unicode properties for \d, \w, \s, \b and (?i) case-folding. UTF is enabled automatically when UCP is set. */
+  readonly UCP:               0x00020000;
+  readonly ANCHORED:          0x80000000;
+  /** Anchor the match to the end of the subject. */
+  readonly ENDANCHORED:       0x20000000;
+  readonly UNGREEDY:          0x00040000;
+  readonly NO_AUTO_CAPTURE:   0x00002000;
+  /** Allow duplicate named groups: (?<name>...)...(?<name>...). */
+  readonly DUPNAMES:          0x00000040;
+  /** $ matches only at the absolute end of the string, not before a trailing newline. */
+  readonly DOLLAR_ENDONLY:    0x00000010;
+  /** Allow [] as an empty character class that never matches. */
+  readonly ALLOW_EMPTY_CLASS: 0x00000001;
+  /** Enable JavaScript-style \\u{HHHH} and \\x{HH} escape sequences. */
+  readonly ALT_BSUX:          0x00000002;
+  /** Treat the entire pattern as a literal string — no metacharacters. */
+  readonly LITERAL:           0x02000000;
+  /** Enable extended character class syntax [[ ]]. */
+  readonly ALT_EXTENDED_CLASS:0x08000000;
 };
 
 /**

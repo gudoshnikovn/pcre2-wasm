@@ -8,6 +8,16 @@ function strToWasm(m, s) {
   return ptr;
 }
 
+/*
+ * Convert a UTF-8 byte offset to a JS string character offset.
+ * PCRE2 reports error positions in bytes; callers expect character positions.
+ */
+function byteOffsetToCharOffset(str, byteOffset) {
+  if (byteOffset <= 0) return 0;
+  const bytes = new TextEncoder().encode(str);
+  return new TextDecoder().decode(bytes.subarray(0, byteOffset)).length;
+}
+
 /* ── Internal: compiled regex handle ────────────────────────────────────── */
 
 class PCRE2Regex {
@@ -169,6 +179,9 @@ export class PCRE2 {
 
   /* Compile a pattern into a reusable PCRE2Regex. Caller must call destroy(). */
   compile(pattern, flags = 0) {
+    // UCP requires UTF; enable it automatically so callers need not add UTF explicitly.
+    if (flags & 0x00020000 /* UCP */) flags |= 0x00080000 /* UTF */;
+
     const m = this.#mod;
     const patternPtr = strToWasm(m, pattern);
     const errBuf     = m._malloc(256);
@@ -183,10 +196,11 @@ export class PCRE2 {
     m._free(patternPtr);
 
     if (ptr === 0) {
-      const msg    = m.UTF8ToString(errBuf);
-      const offset = m.getValue(errOffBuf, 'i32');
+      const msg        = m.UTF8ToString(errBuf);
+      const byteOffset = m.getValue(errOffBuf, 'i32');
       m._free(errBuf);
       m._free(errOffBuf);
+      const offset = byteOffsetToCharOffset(pattern, byteOffset);
       throw new Error(`PCRE2 compile error at offset ${offset}: ${msg}`);
     }
 
@@ -241,13 +255,21 @@ export class PCRE2 {
 }
 
 export const FLAGS = {
-  CASELESS:        0x00000008,  // (?i) Case-insensitive matching
-  MULTILINE:       0x00000400,  // (?m) ^ and $ match line boundaries
-  DOTALL:          0x00000020,  // (?s) . matches any character including newline
-  EXTENDED:        0x00000080,  // (?x) Ignore unescaped whitespace in pattern
-  UTF:             0x00080000,  // Treat pattern and subject as UTF-8
-  ANCHORED:        0x80000000,  // Match only at the start of the subject
-  UNGREEDY:        0x00040000,  // (?U) Invert greediness of quantifiers
-  NO_AUTO_CAPTURE: 0x00002000,  // (?n) Plain () do not capture; use (?:) or named groups
-  EXTENDED_MORE:   0x01000000,  // (?xx) Extended mode: also ignore whitespace in character classes
+  CASELESS:          0x00000008,  // (?i) Case-insensitive matching
+  MULTILINE:         0x00000400,  // (?m) ^ and $ match line boundaries
+  DOTALL:            0x00000020,  // (?s) . matches any character including newline
+  EXTENDED:          0x00000080,  // (?x) Ignore unescaped whitespace in pattern
+  EXTENDED_MORE:     0x01000000,  // (?xx) Extended mode: also ignore whitespace in character classes
+  UTF:               0x00080000,  // Treat pattern and subject as UTF-8
+  UCP:               0x00020000,  // Use Unicode properties for \d, \w, \s, \b and (?i); UTF is enabled automatically
+  ANCHORED:          0x80000000,  // Match only at the start of the subject
+  ENDANCHORED:       0x20000000,  // Match only at the end of the subject
+  UNGREEDY:          0x00040000,  // (?U) Invert greediness of quantifiers
+  NO_AUTO_CAPTURE:   0x00002000,  // (?n) Plain () do not capture; use (?:) or named groups
+  DUPNAMES:          0x00000040,  // Allow duplicate named groups: (?<name>...)...(?<name>...)
+  DOLLAR_ENDONLY:    0x00000010,  // $ matches only at end of string, not before a trailing newline
+  ALLOW_EMPTY_CLASS: 0x00000001,  // Allow [] as an empty character class (never matches)
+  ALT_BSUX:          0x00000002,  // JavaScript-style \u{HHHH} and \x{HH} escape sequences
+  LITERAL:           0x02000000,  // Treat the entire pattern as a literal string
+  ALT_EXTENDED_CLASS:0x08000000,  // Enable extended character class syntax [[ ]]
 };

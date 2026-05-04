@@ -236,6 +236,59 @@ describe('flags', () => {
     const r = pcre2.match('(\\w+)', 'hello', FLAGS.NO_AUTO_CAPTURE);
     assert.deepEqual(r.groups, []);
   });
+
+  it('UCP — (?i) folds non-ASCII with UTF+UCP', () => {
+    assert.equal(pcre2.test('(?i)арт', 'Артикул', FLAGS.UTF | FLAGS.UCP), true);
+  });
+
+  it('UCP — \\b matches at Cyrillic word boundary with UTF+UCP', () => {
+    assert.equal(pcre2.test('(?i)\\b(арт|код)', 'Артикул', FLAGS.UTF | FLAGS.UCP), true);
+  });
+
+  it('UCP — \\w matches Cyrillic letters with UTF+UCP', () => {
+    const r = pcre2.match('\\w+', 'Артикул', FLAGS.UTF | FLAGS.UCP);
+    assert.equal(r?.match, 'Артикул');
+  });
+
+  it('UCP alone auto-enables UTF — no explicit UTF flag needed', () => {
+    assert.equal(pcre2.test('(?i)арт', 'Артикул', FLAGS.UCP), true);
+    assert.equal(pcre2.test('(?i)\\b(арт|код)', 'Артикул', FLAGS.UCP), true);
+    const r = pcre2.match('\\w+', 'Артикул', FLAGS.UCP);
+    assert.equal(r?.match, 'Артикул');
+  });
+
+  it('ENDANCHORED — pattern must end at subject end', () => {
+    assert.equal(pcre2.test('\\d+', 'abc123', FLAGS.ENDANCHORED), true);
+    assert.equal(pcre2.test('\\d+', '123abc', FLAGS.ENDANCHORED), false);
+  });
+
+  it('DOLLAR_ENDONLY — $ does not match before trailing newline', () => {
+    assert.equal(pcre2.test('end$', 'end\n'), true);                          // default: matches
+    assert.equal(pcre2.test('end$', 'end\n', FLAGS.DOLLAR_ENDONLY), false);   // strict: no match
+    assert.equal(pcre2.test('end$', 'end',   FLAGS.DOLLAR_ENDONLY), true);    // strict: matches at real end
+  });
+
+  it('DUPNAMES — allows duplicate named groups', () => {
+    assert.doesNotThrow(() => pcre2.compile('(?<x>a)|(?<x>b)', FLAGS.DUPNAMES));
+    assert.throws(() => pcre2.compile('(?<x>a)|(?<x>b)'));
+  });
+
+  it('ALLOW_EMPTY_CLASS — [] is valid and never matches', () => {
+    assert.throws(() => pcre2.compile('[]'));
+    assert.doesNotThrow(() => pcre2.compile('[]', FLAGS.ALLOW_EMPTY_CLASS));
+    assert.equal(pcre2.test('[]', 'anything', FLAGS.ALLOW_EMPTY_CLASS), false);
+  });
+
+  it('ALT_BSUX — JavaScript-style \\u{HHHH} escape sequences', () => {
+    assert.equal(pcre2.test('\\u0041', 'A', FLAGS.ALT_BSUX), true);  // A = A
+    assert.equal(pcre2.test('\\u0041', 'B', FLAGS.ALT_BSUX), false);
+  });
+
+  it('LITERAL — pattern treated as a literal string', () => {
+    assert.equal(pcre2.test('a.b', 'axb'), true);                      // default: . is wildcard
+    assert.equal(pcre2.test('a.b', 'axb', FLAGS.LITERAL), false);      // literal: no match
+    assert.equal(pcre2.test('a.b', 'a.b', FLAGS.LITERAL), true);       // literal: exact match
+  });
 });
 
 /* ── Inline flags in pattern ────────────────────────────────────────────── */
@@ -263,6 +316,15 @@ describe('compile()', () => {
 
   it('throws on invalid pattern', () => {
     assert.throws(() => pcre2.compile('[invalid'), /PCRE2 compile error/);
+  });
+
+  it('error offset is in characters, not bytes', () => {
+    // 'арт[' — 'арт' is 3 chars (6 UTF-8 bytes); PCRE2 reports the error after '[' (char 4, byte 7).
+    // Without conversion the raw byte offset would appear as 7; with conversion it is 4.
+    assert.throws(
+      () => pcre2.compile('арт[', FLAGS.UTF),
+      /offset 4/
+    );
   });
 
   it('compiled regex supports replace()', () => {
