@@ -148,6 +148,35 @@ class PCRE2Regex {
   }
 
   /*
+   * Splits subject by the pattern. Returns an array of strings and, when the
+   * pattern contains capture groups, the captured text is included between the
+   * surrounding parts (same semantics as JS String.prototype.split with RegExp
+   * or Python re.split).
+   *
+   * limit (optional) — maximum number of splits; remaining subject is returned
+   * as the last element (matches JS / Python behaviour).
+   */
+  split(subject, limit, opts = {}) {
+    if (limit === 0) return [];
+    const matches = this.matchAll(subject, opts);
+    const parts = [];
+    let pos = 0;
+    for (const m of matches) {
+      if (limit !== undefined && parts.length >= limit) break;
+      parts.push(subject.slice(pos, m.index));
+      for (const g of m.groups) parts.push(g ?? undefined);
+      pos = m.index + m.match.length;
+      if (m.match.length === 0) {
+        // Avoid infinite loop on zero-length match — advance one char
+        if (pos < subject.length) pos++;
+        else break;
+      }
+    }
+    if (limit === undefined || parts.length <= limit) parts.push(subject.slice(pos));
+    return parts;
+  }
+
+  /*
    * Replaces the first match. Returns the resulting string.
    * Replacement syntax: $0 or $& = whole match, $1..$n = numbered group,
    * ${name} = named group, $$ = literal dollar.
@@ -282,6 +311,13 @@ export class PCRE2 {
   search(pattern, subject, flags = 0, opts = {}) {
     const re = this.compile(pattern, flags);
     const r  = re.search(subject, opts);
+    re.destroy();
+    return r;
+  }
+
+  split(pattern, subject, limit, flags = 0, opts = {}) {
+    const re = this.compile(pattern, flags);
+    const r  = re.split(subject, limit, opts);
     re.destroy();
     return r;
   }

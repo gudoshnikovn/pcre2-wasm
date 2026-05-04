@@ -132,6 +132,17 @@ export declare class PCRE2Regex {
   /** Replaces all non-overlapping matches. Same replacement syntax as replace(). */
   replaceAll(subject: string, replacement: string, options?: MatchOptions): string;
 
+  /**
+   * Splits subject by the pattern, returning an array of string parts.
+   * When the pattern contains capture groups, the captured text is included
+   * between the surrounding parts (same as JS String.prototype.split with RegExp).
+   * Unmatched optional groups appear as undefined.
+   *
+   * @param limit Maximum number of splits. The remaining subject is appended as
+   *              the last element, matching JS / Python split behaviour.
+   */
+  split(subject: string, limit?: number, options?: MatchOptions): (string | undefined)[];
+
   /** Free WASM memory. No-op if already destroyed. */
   destroy(): void;
 }
@@ -146,6 +157,7 @@ export declare class PCRE2 {
   search(pattern: string, subject: string, flags?: number, options?: MatchOptions): number;
   replace(pattern: string, subject: string, replacement: string, flags?: number, options?: MatchOptions): string;
   replaceAll(pattern: string, subject: string, replacement: string, flags?: number, options?: MatchOptions): string;
+  split(pattern: string, subject: string, limit?: number, flags?: number, options?: MatchOptions): (string | undefined)[];
 }
 
 /**

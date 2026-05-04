@@ -555,3 +555,54 @@ describe('MATCH_FLAGS', () => {
     assert.equal(pcre2.match('^\\w+', chunk).match, 'world');
   });
 });
+
+/* ── split() ────────────────────────────────────────────────────────────── */
+
+describe('split()', () => {
+  it('basic split by fixed delimiter', () => {
+    assert.deepEqual(pcre2.split(',', 'a,b,c'), ['a', 'b', 'c']);
+  });
+
+  it('split by regex with optional whitespace', () => {
+    assert.deepEqual(pcre2.split('\\s*,\\s*', 'one , two , three'), ['one', 'two', 'three']);
+  });
+
+  it('no match returns array with original string', () => {
+    assert.deepEqual(pcre2.split(',', 'abc'), ['abc']);
+  });
+
+  it('empty subject returns array with one empty string', () => {
+    assert.deepEqual(pcre2.split(',', ''), ['']);
+  });
+
+  it('limit restricts the number of splits', () => {
+    assert.deepEqual(pcre2.split(',', 'a,b,c,d', 2), ['a', 'b', 'c,d']);
+  });
+
+  it('limit 0 returns empty array', () => {
+    assert.deepEqual(pcre2.split(',', 'a,b,c', 0), []);
+  });
+
+  it('includes capture groups in result', () => {
+    assert.deepEqual(pcre2.split('(,)', 'a,b,c'), ['a', ',', 'b', ',', 'c']);
+  });
+
+  it('unmatched optional group appears as undefined', () => {
+    const r = pcre2.split('(x)|(,)', 'a,b');
+    // Between 'a' and 'b': group 1 (x) = undefined, group 2 (,) = ','
+    assert.deepEqual(r, ['a', undefined, ',', 'b']);
+  });
+
+  it('PCRE2Regex.split works the same', () => {
+    const re = pcre2.compile('\\s+');
+    assert.deepEqual(re.split('hello world  foo'), ['hello', 'world', 'foo']);
+    re.destroy();
+  });
+
+  it('split with Unicode delimiter', () => {
+    assert.deepEqual(
+      pcre2.split('\\p{Z}+', 'hello world', undefined, FLAGS.UCP),
+      ['hello', 'world'],
+    );
+  });
+});
