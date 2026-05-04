@@ -36,6 +36,18 @@ describe('match()', () => {
     assert.equal(pcre2.match('\\d+', 'abc 123').index, 4);
   });
 
+  it('index is a character offset, not a byte offset, for multi-byte subjects', () => {
+    // 'при' = 3 chars but 6 UTF-8 bytes; 'в' must be at char index 3, not byte index 6
+    const r = pcre2.match('в', 'привет', FLAGS.UTF);
+    assert.equal(r.index, 3);
+  });
+
+  it('matchAll indices are character offsets for multi-byte subjects', () => {
+    const results = pcre2.matchAll('[аеиоу]', 'привет', FLAGS.UTF);
+    // и = char 2, е = char 4
+    assert.deepEqual(results.map(r => r.index), [2, 4]);
+  });
+
   it('groups is empty array when pattern has no capture groups', () => {
     assert.deepEqual(pcre2.match('\\w+', 'hello').groups, []);
   });

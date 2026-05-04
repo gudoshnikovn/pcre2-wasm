@@ -6,6 +6,7 @@
  */
 export interface PCRE2Match {
   match:        string;
+  /** Character offset of the match start in the subject string (not a byte offset). */
   index:        number;
   groups:       (string | null)[];
   namedGroups?: Record<string, string | null>;

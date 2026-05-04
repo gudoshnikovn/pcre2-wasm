@@ -52,7 +52,7 @@ class PCRE2Regex {
    * Returns the first match as an object, or null.
    * {
    *   match:       string,          // full match
-   *   index:       number,          // byte offset in subject (UTF-8)
+   *   index:       number,          // character offset in subject
    *   groups:      (string|null)[], // numbered capture groups (1-based)
    *   namedGroups: Record<string, string|null> | undefined
    * }
@@ -72,6 +72,7 @@ class PCRE2Regex {
         if (rc === -2) { m._free(buf); bufSize *= 4; continue; }
         const result = rc > 0 ? JSON.parse(m.UTF8ToString(buf)) : null;
         m._free(buf);
+        if (result) result.index = byteOffsetToCharOffset(subject, result.index);
         return result;
       }
       throw new Error('PCRE2 match: result too large');
@@ -99,6 +100,7 @@ class PCRE2Regex {
         if (rc === -2) { m._free(buf); bufSize *= 4; continue; }
         const result = rc > 0 ? JSON.parse(m.UTF8ToString(buf)) : [];
         m._free(buf);
+        for (const r of result) r.index = byteOffsetToCharOffset(subject, r.index);
         return result;
       }
       throw new Error('PCRE2 matchAll: result too large');
@@ -108,7 +110,7 @@ class PCRE2Regex {
   }
 
   /*
-   * Returns the byte offset of the first match, or -1 if no match.
+   * Returns the character offset of the first match, or -1 if no match.
    */
   search(subject) {
     const r = this.match(subject);
