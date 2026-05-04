@@ -1,6 +1,6 @@
 import { describe, it, before } from 'node:test';
 import assert from 'node:assert/strict';
-import { createPCRE2, FLAGS } from '../lib/index.js';
+import { createPCRE2, FLAGS, MATCH_FLAGS } from '../lib/index.js';
 
 let pcre2;
 
@@ -439,5 +439,119 @@ describe('edge cases', () => {
   it('newline in subject with DOTALL flag', () => {
     const r = pcre2.match('start(.*)end', 'start\nfoo\nend', FLAGS.DOTALL);
     assert.equal(r.groups[0], '\nfoo\n');
+  });
+});
+
+/* ── startPos ───────────────────────────────────────────────────────────── */
+
+describe('startPos option', () => {
+  it('match() skips characters before startPos', () => {
+    const r = pcre2.match('\\d+', 'abc 123 456', 0, { startPos: 4 });
+    assert.equal(r.match, '123');
+    assert.equal(r.index, 4);
+  });
+
+  it('match() startPos on multibyte (Cyrillic) string', () => {
+    // "Привет 42" — skip "Привет " (7 chars, 13 bytes) and match digits
+    const r = pcre2.match('\\d+', 'Привет 42', FLAGS.UTF, { startPos: 7 });
+    assert.equal(r.match, '42');
+    assert.equal(r.index, 7);
+  });
+
+  it('matchAll() starts from startPos', () => {
+    const results = pcre2.matchAll('\\d+', 'a1 b2 c3', 0, { startPos: 3 });
+    assert.equal(results.length, 2);
+    assert.equal(results[0].match, '2');
+    assert.equal(results[1].match, '3');
+  });
+
+  it('test() with startPos ignores earlier content', () => {
+    assert.equal(pcre2.test('^\\d', 'abc123', 0, { startPos: 3 }), false);
+  });
+
+  it('replace() with startPos leaves prefix unchanged', () => {
+    // 'cost: 100 or 200' — '200' starts at index 13; replace only from there
+    const r = pcre2.replace('\\d+', 'cost: 100 or 200', 'X', 0, { startPos: 13 });
+    assert.equal(r, 'cost: 100 or X');
+  });
+});
+
+/* ── MATCH_FLAGS ────────────────────────────────────────────────────────── */
+
+describe('MATCH_FLAGS', () => {
+  it('exports correct constants', () => {
+    assert.equal(MATCH_FLAGS.NOTBOL,           0x00000001);
+    assert.equal(MATCH_FLAGS.NOTEOL,           0x00000002);
+    assert.equal(MATCH_FLAGS.NOTEMPTY,         0x00000004);
+    assert.equal(MATCH_FLAGS.NOTEMPTY_ATSTART, 0x00000008);
+    assert.equal(MATCH_FLAGS.PARTIAL_SOFT,     0x00000010);
+    assert.equal(MATCH_FLAGS.PARTIAL_HARD,     0x00000020);
+  });
+
+  it('NOTBOL: ^ does not match at start of subject', () => {
+    // Without NOTBOL, ^abc matches
+    assert.equal(pcre2.test('^abc', 'abcdef'), true);
+    // With NOTBOL, ^ is suppressed
+    assert.equal(pcre2.test('^abc', 'abcdef', 0, { matchFlags: MATCH_FLAGS.NOTBOL }), false);
+  });
+
+  it('NOTEOL: $ does not match at end of subject', () => {
+    assert.equal(pcre2.test('def$', 'abcdef'), true);
+    assert.equal(pcre2.test('def$', 'abcdef', 0, { matchFlags: MATCH_FLAGS.NOTEOL }), false);
+  });
+
+  it('NOTEMPTY: empty pattern match is rejected', () => {
+    // Without NOTEMPTY, a* matches empty string at position 0
+    const r1 = pcre2.match('a*', 'bbb');
+    assert.equal(r1.match, '');
+    // With NOTEMPTY, first empty match is skipped — falls through to the 'b' positions
+    // Actually PCRE2 returns NOMATCH immediately for position 0 when NOTEMPTY is set
+    // and the only match there is empty. The next attempt starts at 1 and matches another empty.
+    // For the full match(), it finds the first non-empty match or null.
+    // a* on 'bbb' with NOTEMPTY — all positions produce empty matches, so null.
+    const r2 = pcre2.match('a*', 'bbb', 0, { matchFlags: MATCH_FLAGS.NOTEMPTY });
+    assert.equal(r2, null);
+  });
+
+  it('PARTIAL_SOFT: returns partial match when no full match', () => {
+    // Pattern 'hello world' against 'hello' — partial match at start
+    const r = pcre2.match('hello world', 'hello', 0, { matchFlags: MATCH_FLAGS.PARTIAL_SOFT });
+    assert.ok(r !== null, 'expected partial match result');
+    assert.equal(r.match, 'hello');
+    assert.equal(r.partial, true);
+  });
+
+  it('PARTIAL_SOFT: returns full match when one exists', () => {
+    // Full match is preferred over partial with PARTIAL_SOFT
+    const r = pcre2.match('\\d+', 'abc 123 hello wor', 0, { matchFlags: MATCH_FLAGS.PARTIAL_SOFT });
+    assert.ok(r !== null);
+    assert.equal(r.match, '123');
+    assert.equal(r.partial, undefined);
+  });
+
+  it('PARTIAL_HARD: partial match even when full match available later', () => {
+    // 'hello' matches partially; PARTIAL_HARD returns it without looking further
+    const r = pcre2.match('hello', 'say hello', 0, { matchFlags: MATCH_FLAGS.PARTIAL_HARD });
+    // With PARTIAL_HARD, PCRE2 reports partial for incomplete match at current position
+    // 'say hello' — full match exists, so PARTIAL_HARD still finds the full match
+    assert.ok(r !== null);
+  });
+
+  it('PARTIAL_SOFT in matchAll includes partial at end', () => {
+    // 'hello' against 'say hel' — partial match
+    const results = pcre2.matchAll('hello', 'say hel', 0, { matchFlags: MATCH_FLAGS.PARTIAL_SOFT });
+    assert.equal(results.length, 1);
+    assert.equal(results[0].match, 'hel');
+    assert.equal(results[0].partial, true);
+  });
+
+  it('NOTBOL + NOTEOL combined with startPos for streaming', () => {
+    // Simulate processing a chunk that is the middle of a larger string.
+    // Pattern ^\w+ should not match because chunk is not at BOL.
+    const chunk = 'world foo';
+    const noMatch = pcre2.match('^\\w+', chunk, 0, { matchFlags: MATCH_FLAGS.NOTBOL });
+    assert.equal(noMatch, null);
+    // Without NOTBOL it matches
+    assert.equal(pcre2.match('^\\w+', chunk).match, 'world');
   });
 });

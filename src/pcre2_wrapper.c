@@ -5,6 +5,10 @@
 #include <stdio.h>
 #include "pcre2.h"
 
+/* Sentinel returned to JS when our output buffer is too small (retry needed).
+   Must not collide with any PCRE2 error code (all are > -200). */
+#define WASM_BUF_OVERFLOW (-999)
+
 /* ── JSON write helpers ─────────────────────────────────────────────────── */
 
 typedef struct {
@@ -72,7 +76,8 @@ static void nt_load(pcre2_code* re, NameTable* nt) {
 /* ── Core: write one match as a JSON object ─────────────────────────────── */
 
 static void jb_match_object(JsonBuf* b, const char* subject,
-                             PCRE2_SIZE* ov, int rc, const NameTable* nt) {
+                             PCRE2_SIZE* ov, int rc, const NameTable* nt,
+                             int partial) {
     jb_char(b, '{');
 
     /* "match":"..." */
@@ -119,6 +124,8 @@ static void jb_match_object(JsonBuf* b, const char* subject,
         }
         jb_char(b, '}');
     }
+
+    if (partial) jb_lit(b, ",\"partial\":true");
 
     jb_char(b, '}');
 }
@@ -171,10 +178,11 @@ int pcre2_wasm_error_message(int errcode, char* buf, uint32_t bufsize) {
 
 /*
  * First match. Returns:
- *   > 0  match found; match_buf contains JSON object
- *   -1   no match
- *   -2   match_buf too small — retry with a larger buffer
- *   < -2 PCRE2 error (e.g. -47 matchlimit, -53 depthlimit)
+ *   > 0                match found; match_buf contains JSON object
+ *   -1                 no match (PCRE2_ERROR_NOMATCH)
+ *   -2                 partial match (PCRE2_ERROR_PARTIAL); JSON written with "partial":true
+ *   WASM_BUF_OVERFLOW  match_buf too small — retry with a larger buffer
+ *   other negative     PCRE2 error (e.g. matchlimit, depthlimit)
  *
  * match_limit / depth_limit: 0 means use PCRE2 built-in defaults (no cap).
  *
@@ -184,7 +192,8 @@ int pcre2_wasm_error_message(int errcode, char* buf, uint32_t bufsize) {
 EMSCRIPTEN_KEEPALIVE
 int pcre2_wasm_match(pcre2_code* re, const char* subject,
                      char* match_buf, uint32_t match_buf_size,
-                     uint32_t match_limit, uint32_t depth_limit) {
+                     uint32_t match_limit, uint32_t depth_limit,
+                     uint32_t start_offset, uint32_t match_flags) {
     if (!re || !subject) return -1;
 
     PCRE2_SIZE subj_len = strlen(subject);
@@ -192,17 +201,21 @@ int pcre2_wasm_match(pcre2_code* re, const char* subject,
     if (!md) return -48;
 
     pcre2_match_context* mctx = make_mctx(match_limit, depth_limit);
-    int rc = pcre2_match(re, (PCRE2_SPTR)subject, subj_len, 0, 0, md, mctx);
+    int rc = pcre2_match(re, (PCRE2_SPTR)subject, subj_len,
+                         (PCRE2_SIZE)start_offset, (uint32_t)match_flags, md, mctx);
     if (mctx) pcre2_match_context_free(mctx);
 
-    if (rc > 0 && match_buf && match_buf_size > 2) {
+    int is_partial = (rc == PCRE2_ERROR_PARTIAL);
+    if ((rc > 0 || is_partial) && match_buf && match_buf_size > 2) {
         NameTable nt;
         nt_load(re, &nt);
+        /* For partial matches PCRE2 fills ovector[0..1] only; treat as rc=1. */
+        int ser_rc = is_partial ? 1 : rc;
         JsonBuf b = { match_buf, 0, match_buf_size, 0 };
-        jb_match_object(&b, subject, pcre2_get_ovector_pointer(md), rc, &nt);
+        jb_match_object(&b, subject, pcre2_get_ovector_pointer(md), ser_rc, &nt, is_partial);
         if (b.overflow) {
             pcre2_match_data_free(md);
-            return -2;
+            return WASM_BUF_OVERFLOW;
         }
         b.buf[b.pos] = '\0';
     }
@@ -226,7 +239,8 @@ int pcre2_wasm_match(pcre2_code* re, const char* subject,
 EMSCRIPTEN_KEEPALIVE
 int pcre2_wasm_match_all(pcre2_code* re, const char* subject,
                           char* match_buf, uint32_t match_buf_size,
-                          uint32_t match_limit, uint32_t depth_limit) {
+                          uint32_t match_limit, uint32_t depth_limit,
+                          uint32_t start_offset, uint32_t match_flags) {
     if (!re || !subject) return -1;
 
     PCRE2_SIZE subj_len = strlen(subject);
@@ -244,11 +258,27 @@ int pcre2_wasm_match_all(pcre2_code* re, const char* subject,
 
     int total = 0;
     int match_rc = 0;
-    PCRE2_SIZE offset = 0;
+    PCRE2_SIZE offset = (PCRE2_SIZE)start_offset;
 
     while (offset <= subj_len) {
-        int rc = pcre2_match(re, (PCRE2_SPTR)subject, subj_len, offset, 0, md, mctx);
+        int rc = pcre2_match(re, (PCRE2_SPTR)subject, subj_len,
+                             offset, (uint32_t)match_flags, md, mctx);
         if (rc == PCRE2_ERROR_NOMATCH) break;
+        if (rc == PCRE2_ERROR_PARTIAL) {
+            /* Partial match at end of subject — include it and stop. */
+            if (write_json) {
+                PCRE2_SIZE* ov = pcre2_get_ovector_pointer(md);
+                if (total > 0) jb_char(&b, ',');
+                jb_match_object(&b, subject, ov, 1, &nt, 1);
+                if (b.overflow) {
+                    if (mctx) pcre2_match_context_free(mctx);
+                    pcre2_match_data_free(md);
+                    return WASM_BUF_OVERFLOW;
+                }
+            }
+            total++;
+            break;
+        }
         if (rc < 0) { match_rc = rc; break; }  /* propagate errors (limits, etc.) */
 
         PCRE2_SIZE* ov = pcre2_get_ovector_pointer(md);
@@ -256,11 +286,11 @@ int pcre2_wasm_match_all(pcre2_code* re, const char* subject,
 
         if (write_json) {
             if (total > 0) jb_char(&b, ',');
-            jb_match_object(&b, subject, ov, rc, &nt);
+            jb_match_object(&b, subject, ov, rc, &nt, 0);
             if (b.overflow) {
                 if (mctx) pcre2_match_context_free(mctx);
                 pcre2_match_data_free(md);
-                return -2;
+                return WASM_BUF_OVERFLOW;
             }
         }
 
@@ -300,26 +330,28 @@ EMSCRIPTEN_KEEPALIVE
 int pcre2_wasm_replace(pcre2_code* re, const char* subject,
                         const char* replacement, int global,
                         char* out_buf, uint32_t out_buf_size,
-                        uint32_t match_limit, uint32_t depth_limit) {
+                        uint32_t match_limit, uint32_t depth_limit,
+                        uint32_t start_offset, uint32_t match_flags) {
     if (!re || !subject || !replacement || !out_buf) return -1;
 
     pcre2_match_context* mctx = make_mctx(match_limit, depth_limit);
 
     PCRE2_SIZE out_len = (PCRE2_SIZE)out_buf_size;
-    uint32_t opts = PCRE2_SUBSTITUTE_EXTENDED | PCRE2_SUBSTITUTE_OVERFLOW_LENGTH;
+    uint32_t opts = PCRE2_SUBSTITUTE_EXTENDED | PCRE2_SUBSTITUTE_OVERFLOW_LENGTH
+                    | (uint32_t)match_flags;
     if (global) opts |= PCRE2_SUBSTITUTE_GLOBAL;
 
     int rc = pcre2_substitute(
         re,
         (PCRE2_SPTR)subject, PCRE2_ZERO_TERMINATED,
-        0, opts,
+        (PCRE2_SIZE)start_offset, opts,
         NULL, mctx,
         (PCRE2_SPTR)replacement, PCRE2_ZERO_TERMINATED,
         (PCRE2_UCHAR*)out_buf, &out_len
     );
 
     if (mctx) pcre2_match_context_free(mctx);
-    return (rc == PCRE2_ERROR_NOMEMORY) ? -2 : rc;
+    return (rc == PCRE2_ERROR_NOMEMORY) ? WASM_BUF_OVERFLOW : rc;
 }
 
 EMSCRIPTEN_KEEPALIVE

@@ -18,12 +18,21 @@ function byteOffsetToCharOffset(str, byteOffset) {
   return new TextDecoder().decode(bytes.subarray(0, byteOffset)).length;
 }
 
+/* Convert a JS character offset to a UTF-8 byte offset (needed for startPos). */
+function charOffsetToByteOffset(str, charOffset) {
+  if (charOffset <= 0) return 0;
+  return new TextEncoder().encode(str.slice(0, charOffset)).length;
+}
+
+/* Sentinel returned by C wrapper when the output buffer was too small (retry). */
+const WASM_BUF_OVERFLOW = -999;
+
 /*
  * Throw a descriptive error for PCRE2 match errors (limit exceeded, etc.).
- * rc = -1 (no match) and rc = -2 (buf too small) are handled by callers.
+ * rc = -1 (no match), rc = -2 (PCRE2_ERROR_PARTIAL), WASM_BUF_OVERFLOW are handled by callers.
  */
 function throwIfMatchError(m, rc) {
-  if (rc >= -1 || rc === -2) return;
+  if (rc >= -1 || rc === -2 || rc === WASM_BUF_OVERFLOW) return;
   const errBuf = m._malloc(256);
   m.ccall('pcre2_wasm_error_message', 'number',
     ['number', 'number', 'number'],
@@ -51,13 +60,14 @@ class PCRE2Regex {
   }
 
   /* Returns true if the pattern matches anywhere in subject. */
-  test(subject, { matchLimit = 0, depthLimit = 0 } = {}) {
+  test(subject, { matchLimit = 0, depthLimit = 0, startPos = 0, matchFlags = 0 } = {}) {
     const m = this.#mod;
     const subjectPtr = strToWasm(m, subject);
+    const startByte = charOffsetToByteOffset(subject, startPos);
     const rc = m.ccall(
       'pcre2_wasm_match_all', 'number',
-      ['number', 'number', 'number', 'number', 'number', 'number'],
-      [this.#ptr, subjectPtr, 0, 0, matchLimit, depthLimit]
+      ['number', 'number', 'number', 'number', 'number', 'number', 'number', 'number'],
+      [this.#ptr, subjectPtr, 0, 0, matchLimit, depthLimit, startByte, matchFlags]
     );
     m._free(subjectPtr);
     throwIfMatchError(m, rc);
@@ -73,21 +83,22 @@ class PCRE2Regex {
    *   namedGroups: Record<string, string|null> | undefined
    * }
    */
-  match(subject, { matchLimit = 0, depthLimit = 0 } = {}) {
+  match(subject, { matchLimit = 0, depthLimit = 0, startPos = 0, matchFlags = 0 } = {}) {
     const m = this.#mod;
     const subjectPtr = strToWasm(m, subject);
+    const startByte = charOffsetToByteOffset(subject, startPos);
     let bufSize = 16 * 1024;
     try {
       for (let attempt = 0; attempt < 8; attempt++) {
         const buf = m._malloc(bufSize);
         const rc = m.ccall(
           'pcre2_wasm_match', 'number',
-          ['number', 'number', 'number', 'number', 'number', 'number'],
-          [this.#ptr, subjectPtr, buf, bufSize, matchLimit, depthLimit]
+          ['number', 'number', 'number', 'number', 'number', 'number', 'number', 'number'],
+          [this.#ptr, subjectPtr, buf, bufSize, matchLimit, depthLimit, startByte, matchFlags]
         );
-        if (rc === -2) { m._free(buf); bufSize *= 4; continue; }
+        if (rc === WASM_BUF_OVERFLOW) { m._free(buf); bufSize *= 4; continue; }
         throwIfMatchError(m, rc);
-        const result = rc > 0 ? JSON.parse(m.UTF8ToString(buf)) : null;
+        const result = (rc > 0 || rc === -2) ? JSON.parse(m.UTF8ToString(buf)) : null;
         m._free(buf);
         if (result) result.index = byteOffsetToCharOffset(subject, result.index);
         return result;
@@ -102,19 +113,20 @@ class PCRE2Regex {
    * Returns all non-overlapping matches as an array of match objects.
    * Each element has the same shape as the result of match().
    */
-  matchAll(subject, { matchLimit = 0, depthLimit = 0 } = {}) {
+  matchAll(subject, { matchLimit = 0, depthLimit = 0, startPos = 0, matchFlags = 0 } = {}) {
     const m = this.#mod;
     const subjectPtr = strToWasm(m, subject);
+    const startByte = charOffsetToByteOffset(subject, startPos);
     let bufSize = 64 * 1024;
     try {
       for (let attempt = 0; attempt < 8; attempt++) {
         const buf = m._malloc(bufSize);
         const rc = m.ccall(
           'pcre2_wasm_match_all', 'number',
-          ['number', 'number', 'number', 'number', 'number', 'number'],
-          [this.#ptr, subjectPtr, buf, bufSize, matchLimit, depthLimit]
+          ['number', 'number', 'number', 'number', 'number', 'number', 'number', 'number'],
+          [this.#ptr, subjectPtr, buf, bufSize, matchLimit, depthLimit, startByte, matchFlags]
         );
-        if (rc === -2) { m._free(buf); bufSize *= 4; continue; }
+        if (rc === WASM_BUF_OVERFLOW) { m._free(buf); bufSize *= 4; continue; }
         throwIfMatchError(m, rc);
         const result = rc > 0 ? JSON.parse(m.UTF8ToString(buf)) : [];
         m._free(buf);
@@ -152,22 +164,23 @@ class PCRE2Regex {
     return this.#replace(subject, replacement, true, opts);
   }
 
-  #replace(subject, replacement, global, { matchLimit = 0, depthLimit = 0 } = {}) {
+  #replace(subject, replacement, global, { matchLimit = 0, depthLimit = 0, startPos = 0, matchFlags = 0 } = {}) {
     const m = this.#mod;
     // Convert JS $& (whole match) to PCRE2 extended syntax $0
     const repl = replacement.replace(/\$&/g, '$0');
     const subjectPtr = strToWasm(m, subject);
     const replPtr    = strToWasm(m, repl);
+    const startByte  = charOffsetToByteOffset(subject, startPos);
     let bufSize = Math.max(m.lengthBytesUTF8(subject) * 2 + 1024, 16 * 1024);
     try {
       for (let attempt = 0; attempt < 10; attempt++) {
         const buf = m._malloc(bufSize);
         const rc = m.ccall(
           'pcre2_wasm_replace', 'number',
-          ['number', 'number', 'number', 'number', 'number', 'number', 'number', 'number'],
-          [this.#ptr, subjectPtr, replPtr, global ? 1 : 0, buf, bufSize, matchLimit, depthLimit]
+          ['number', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number'],
+          [this.#ptr, subjectPtr, replPtr, global ? 1 : 0, buf, bufSize, matchLimit, depthLimit, startByte, matchFlags]
         );
-        if (rc === -2) { m._free(buf); bufSize *= 4; continue; }
+        if (rc === WASM_BUF_OVERFLOW) { m._free(buf); bufSize *= 4; continue; }
         throwIfMatchError(m, rc);
         const result = m.UTF8ToString(buf);
         m._free(buf);
@@ -273,6 +286,15 @@ export class PCRE2 {
     return r;
   }
 }
+
+export const MATCH_FLAGS = {
+  NOTBOL:           0x00000001,  // Subject is not at a line beginning; ^ won't match at start
+  NOTEOL:           0x00000002,  // Subject is not at a line end; $ won't match at end
+  NOTEMPTY:         0x00000004,  // Empty string is not a valid match
+  NOTEMPTY_ATSTART: 0x00000008,  // Empty string at start of subject is not a valid match
+  PARTIAL_SOFT:     0x00000010,  // Return partial match if no full match; prefer full match
+  PARTIAL_HARD:     0x00000020,  // Return partial match if no full match; prefer partial match
+};
 
 export const FLAGS = {
   CASELESS:          0x00000008,  // (?i) Case-insensitive matching

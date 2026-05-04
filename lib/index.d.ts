@@ -3,6 +3,7 @@
  * `groups` contains numbered capture groups (index 0 = first group).
  * `namedGroups` is present only when the pattern contains named groups.
  * A null entry means the corresponding optional group did not participate.
+ * `partial` is true when PARTIAL_SOFT or PARTIAL_HARD was set and only a partial match was found.
  */
 export interface PCRE2Match {
   match:        string;
@@ -10,6 +11,8 @@ export interface PCRE2Match {
   index:        number;
   groups:       (string | null)[];
   namedGroups?: Record<string, string | null>;
+  /** Present and true only for partial matches (when MATCH_FLAGS.PARTIAL_SOFT/HARD is used). */
+  partial?:     true;
 }
 
 /**
@@ -29,7 +32,45 @@ export interface MatchOptions {
    * A value of 0 (default) means no limit beyond PCRE2's built-in default.
    */
   depthLimit?: number;
+  /**
+   * Character offset in the subject at which to start matching (default 0).
+   * Unlike slicing the subject, this preserves correct ^ / $ / \b behaviour
+   * when combined with MATCH_FLAGS.NOTBOL / NOTEOL.
+   */
+  startPos?: number;
+  /**
+   * Bitwise OR of MATCH_FLAGS constants (NOTBOL, NOTEOL, NOTEMPTY, PARTIAL_SOFT, etc.).
+   * These are passed directly to pcre2_match / pcre2_substitute at match time.
+   */
+  matchFlags?: number;
 }
+
+/**
+ * Match-time flag constants. Passed via MatchOptions.matchFlags.
+ * Combine with bitwise OR: MATCH_FLAGS.NOTBOL | MATCH_FLAGS.NOTEOL
+ */
+export declare const MATCH_FLAGS: {
+  /** Subject is not at a line beginning; ^ will not match at start. */
+  readonly NOTBOL:           0x00000001;
+  /** Subject is not at a line end; $ will not match at end. */
+  readonly NOTEOL:           0x00000002;
+  /** An empty string is not a valid match. */
+  readonly NOTEMPTY:         0x00000004;
+  /** An empty string at the start of the subject is not a valid match. */
+  readonly NOTEMPTY_ATSTART: 0x00000008;
+  /**
+   * Return a partial match when no full match is found.
+   * A full match takes priority over a partial match.
+   * The result has partial: true.
+   */
+  readonly PARTIAL_SOFT:     0x00000010;
+  /**
+   * Return a partial match when no full match is found.
+   * A partial match takes priority over a full match that starts later.
+   * The result has partial: true.
+   */
+  readonly PARTIAL_HARD:     0x00000020;
+};
 
 /**
  * PCRE2 flag constants. Combine with bitwise OR: FLAGS.CASELESS | FLAGS.MULTILINE
