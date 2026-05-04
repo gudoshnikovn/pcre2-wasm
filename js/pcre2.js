@@ -18,6 +18,21 @@ function byteOffsetToCharOffset(str, byteOffset) {
   return new TextDecoder().decode(bytes.subarray(0, byteOffset)).length;
 }
 
+/*
+ * Throw a descriptive error for PCRE2 match errors (limit exceeded, etc.).
+ * rc = -1 (no match) and rc = -2 (buf too small) are handled by callers.
+ */
+function throwIfMatchError(m, rc) {
+  if (rc >= -1 || rc === -2) return;
+  const errBuf = m._malloc(256);
+  m.ccall('pcre2_wasm_error_message', 'number',
+    ['number', 'number', 'number'],
+    [rc, errBuf, 256]);
+  const msg = m.UTF8ToString(errBuf);
+  m._free(errBuf);
+  throw new Error(`PCRE2 match error: ${msg}`);
+}
+
 /* ── Internal: compiled regex handle ────────────────────────────────────── */
 
 class PCRE2Regex {
@@ -36,15 +51,16 @@ class PCRE2Regex {
   }
 
   /* Returns true if the pattern matches anywhere in subject. */
-  test(subject) {
+  test(subject, { matchLimit = 0, depthLimit = 0 } = {}) {
     const m = this.#mod;
     const subjectPtr = strToWasm(m, subject);
     const rc = m.ccall(
       'pcre2_wasm_match_all', 'number',
-      ['number', 'number', 'number', 'number'],
-      [this.#ptr, subjectPtr, 0, 0]
+      ['number', 'number', 'number', 'number', 'number', 'number'],
+      [this.#ptr, subjectPtr, 0, 0, matchLimit, depthLimit]
     );
     m._free(subjectPtr);
+    throwIfMatchError(m, rc);
     return rc > 0;
   }
 
@@ -57,7 +73,7 @@ class PCRE2Regex {
    *   namedGroups: Record<string, string|null> | undefined
    * }
    */
-  match(subject) {
+  match(subject, { matchLimit = 0, depthLimit = 0 } = {}) {
     const m = this.#mod;
     const subjectPtr = strToWasm(m, subject);
     let bufSize = 16 * 1024;
@@ -66,10 +82,11 @@ class PCRE2Regex {
         const buf = m._malloc(bufSize);
         const rc = m.ccall(
           'pcre2_wasm_match', 'number',
-          ['number', 'number', 'number', 'number'],
-          [this.#ptr, subjectPtr, buf, bufSize]
+          ['number', 'number', 'number', 'number', 'number', 'number'],
+          [this.#ptr, subjectPtr, buf, bufSize, matchLimit, depthLimit]
         );
         if (rc === -2) { m._free(buf); bufSize *= 4; continue; }
+        throwIfMatchError(m, rc);
         const result = rc > 0 ? JSON.parse(m.UTF8ToString(buf)) : null;
         m._free(buf);
         if (result) result.index = byteOffsetToCharOffset(subject, result.index);
@@ -85,7 +102,7 @@ class PCRE2Regex {
    * Returns all non-overlapping matches as an array of match objects.
    * Each element has the same shape as the result of match().
    */
-  matchAll(subject) {
+  matchAll(subject, { matchLimit = 0, depthLimit = 0 } = {}) {
     const m = this.#mod;
     const subjectPtr = strToWasm(m, subject);
     let bufSize = 64 * 1024;
@@ -94,10 +111,11 @@ class PCRE2Regex {
         const buf = m._malloc(bufSize);
         const rc = m.ccall(
           'pcre2_wasm_match_all', 'number',
-          ['number', 'number', 'number', 'number'],
-          [this.#ptr, subjectPtr, buf, bufSize]
+          ['number', 'number', 'number', 'number', 'number', 'number'],
+          [this.#ptr, subjectPtr, buf, bufSize, matchLimit, depthLimit]
         );
         if (rc === -2) { m._free(buf); bufSize *= 4; continue; }
+        throwIfMatchError(m, rc);
         const result = rc > 0 ? JSON.parse(m.UTF8ToString(buf)) : [];
         m._free(buf);
         for (const r of result) r.index = byteOffsetToCharOffset(subject, r.index);
@@ -112,8 +130,8 @@ class PCRE2Regex {
   /*
    * Returns the character offset of the first match, or -1 if no match.
    */
-  search(subject) {
-    const r = this.match(subject);
+  search(subject, opts = {}) {
+    const r = this.match(subject, opts);
     return r !== null ? r.index : -1;
   }
 
@@ -122,19 +140,19 @@ class PCRE2Regex {
    * Replacement syntax: $0 or $& = whole match, $1..$n = numbered group,
    * ${name} = named group, $$ = literal dollar.
    */
-  replace(subject, replacement) {
-    return this.#replace(subject, replacement, false);
+  replace(subject, replacement, opts = {}) {
+    return this.#replace(subject, replacement, false, opts);
   }
 
   /*
    * Replaces all non-overlapping matches. Returns the resulting string.
    * Same replacement syntax as replace().
    */
-  replaceAll(subject, replacement) {
-    return this.#replace(subject, replacement, true);
+  replaceAll(subject, replacement, opts = {}) {
+    return this.#replace(subject, replacement, true, opts);
   }
 
-  #replace(subject, replacement, global) {
+  #replace(subject, replacement, global, { matchLimit = 0, depthLimit = 0 } = {}) {
     const m = this.#mod;
     // Convert JS $& (whole match) to PCRE2 extended syntax $0
     const repl = replacement.replace(/\$&/g, '$0');
@@ -146,11 +164,11 @@ class PCRE2Regex {
         const buf = m._malloc(bufSize);
         const rc = m.ccall(
           'pcre2_wasm_replace', 'number',
-          ['number', 'number', 'number', 'number', 'number', 'number'],
-          [this.#ptr, subjectPtr, replPtr, global ? 1 : 0, buf, bufSize]
+          ['number', 'number', 'number', 'number', 'number', 'number', 'number', 'number'],
+          [this.#ptr, subjectPtr, replPtr, global ? 1 : 0, buf, bufSize, matchLimit, depthLimit]
         );
         if (rc === -2) { m._free(buf); bufSize *= 4; continue; }
-        if (rc < 0) { m._free(buf); throw new Error(`PCRE2 replace error: ${rc}`); }
+        throwIfMatchError(m, rc);
         const result = m.UTF8ToString(buf);
         m._free(buf);
         return result;
@@ -213,44 +231,44 @@ export class PCRE2 {
 
   /* One-shot helpers — compile, operate, destroy. */
 
-  test(pattern, subject, flags = 0) {
+  test(pattern, subject, flags = 0, opts = {}) {
     const re = this.compile(pattern, flags);
-    const r  = re.test(subject);
+    const r  = re.test(subject, opts);
     re.destroy();
     return r;
   }
 
-  match(pattern, subject, flags = 0) {
+  match(pattern, subject, flags = 0, opts = {}) {
     const re = this.compile(pattern, flags);
-    const r  = re.match(subject);
+    const r  = re.match(subject, opts);
     re.destroy();
     return r;
   }
 
-  matchAll(pattern, subject, flags = 0) {
+  matchAll(pattern, subject, flags = 0, opts = {}) {
     const re = this.compile(pattern, flags);
-    const r  = re.matchAll(subject);
+    const r  = re.matchAll(subject, opts);
     re.destroy();
     return r;
   }
 
-  replace(pattern, subject, replacement, flags = 0) {
+  replace(pattern, subject, replacement, flags = 0, opts = {}) {
     const re = this.compile(pattern, flags);
-    const r  = re.replace(subject, replacement);
+    const r  = re.replace(subject, replacement, opts);
     re.destroy();
     return r;
   }
 
-  replaceAll(pattern, subject, replacement, flags = 0) {
+  replaceAll(pattern, subject, replacement, flags = 0, opts = {}) {
     const re = this.compile(pattern, flags);
-    const r  = re.replaceAll(subject, replacement);
+    const r  = re.replaceAll(subject, replacement, opts);
     re.destroy();
     return r;
   }
 
-  search(pattern, subject, flags = 0) {
+  search(pattern, subject, flags = 0, opts = {}) {
     const re = this.compile(pattern, flags);
-    const r  = re.search(subject);
+    const r  = re.search(subject, opts);
     re.destroy();
     return r;
   }

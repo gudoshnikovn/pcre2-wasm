@@ -354,6 +354,48 @@ describe('compile()', () => {
   });
 });
 
+/* ── ReDoS protection (matchLimit / depthLimit) ─────────────────────────── */
+
+describe('ReDoS protection', () => {
+  // ^ prevents PCRE2's "first required char" pre-check optimisation, forcing full backtracking
+  const REDOS_PATTERN = '^(a+)+$';
+  const REDOS_SUBJECT = 'a'.repeat(20) + 'c';
+
+  it('matchLimit stops catastrophic backtracking', () => {
+    assert.throws(
+      () => pcre2.test(REDOS_PATTERN, REDOS_SUBJECT, 0, { matchLimit: 1000 }),
+      /match limit exceeded/i
+    );
+  });
+
+  it('depthLimit stops deep recursion', () => {
+    assert.throws(
+      () => pcre2.test(REDOS_PATTERN, REDOS_SUBJECT, 0, { depthLimit: 10 }),
+      /depth limit exceeded/i
+    );
+  });
+
+  it('limits do not affect normal patterns', () => {
+    assert.equal(pcre2.test('\\d+', 'abc 123', 0, { matchLimit: 1000, depthLimit: 100 }), true);
+  });
+
+  it('compiled regex also respects limits', () => {
+    const re = pcre2.compile(REDOS_PATTERN);
+    assert.throws(
+      () => re.test(REDOS_SUBJECT, { matchLimit: 1000 }),
+      /match limit exceeded/i
+    );
+    re.destroy();
+  });
+
+  it('matchAll stops on limit mid-loop', () => {
+    assert.throws(
+      () => pcre2.matchAll(REDOS_PATTERN, REDOS_SUBJECT, 0, { matchLimit: 1000 }),
+      /match limit exceeded/i
+    );
+  });
+});
+
 /* ── Large inputs (dynamic buffer) ─────────────────────────────────────── */
 
 describe('large inputs', () => {

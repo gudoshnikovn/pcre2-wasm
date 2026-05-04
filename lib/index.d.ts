@@ -13,6 +13,25 @@ export interface PCRE2Match {
 }
 
 /**
+ * Options for match operations. All fields are optional.
+ *
+ * Use matchLimit and depthLimit to protect against ReDoS on untrusted patterns:
+ * if either limit is exceeded PCRE2 throws instead of running indefinitely.
+ */
+export interface MatchOptions {
+  /**
+   * Maximum number of backtracking steps before throwing.
+   * A value of 0 (default) means no limit beyond PCRE2's built-in default.
+   */
+  matchLimit?: number;
+  /**
+   * Maximum depth of the backtracking stack before throwing.
+   * A value of 0 (default) means no limit beyond PCRE2's built-in default.
+   */
+  depthLimit?: number;
+}
+
+/**
  * PCRE2 flag constants. Combine with bitwise OR: FLAGS.CASELESS | FLAGS.MULTILINE
  */
 export declare const FLAGS: {
@@ -51,29 +70,26 @@ export declare class PCRE2Regex {
   readonly pattern: string;
 
   /** Returns true if the pattern matches anywhere in subject. */
-  test(subject: string): boolean;
+  test(subject: string, options?: MatchOptions): boolean;
 
   /** Returns the first match, or null if no match. */
-  match(subject: string): PCRE2Match | null;
+  match(subject: string, options?: MatchOptions): PCRE2Match | null;
 
   /** Returns all non-overlapping matches. */
-  matchAll(subject: string): PCRE2Match[];
+  matchAll(subject: string, options?: MatchOptions): PCRE2Match[];
 
-  /**
-   * Returns the byte offset of the first match, or -1 if no match.
-   * Note: offset is in UTF-8 bytes when the UTF flag is used.
-   */
-  search(subject: string): number;
+  /** Returns the character offset of the first match, or -1 if no match. */
+  search(subject: string, options?: MatchOptions): number;
 
   /**
    * Replaces the first match and returns the resulting string.
    * Replacement syntax: $0 or $& = whole match, $1..$n = numbered group,
    * ${name} = named group, $$ = literal dollar.
    */
-  replace(subject: string, replacement: string): string;
+  replace(subject: string, replacement: string, options?: MatchOptions): string;
 
   /** Replaces all non-overlapping matches. Same replacement syntax as replace(). */
-  replaceAll(subject: string, replacement: string): string;
+  replaceAll(subject: string, replacement: string, options?: MatchOptions): string;
 
   /** Free WASM memory. No-op if already destroyed. */
   destroy(): void;
@@ -83,12 +99,12 @@ export declare class PCRE2 {
   /** Compile a pattern into a reusable PCRE2Regex. Caller must call destroy() when done. */
   compile(pattern: string, flags?: number): PCRE2Regex;
 
-  test(pattern: string, subject: string, flags?: number): boolean;
-  match(pattern: string, subject: string, flags?: number): PCRE2Match | null;
-  matchAll(pattern: string, subject: string, flags?: number): PCRE2Match[];
-  search(pattern: string, subject: string, flags?: number): number;
-  replace(pattern: string, subject: string, replacement: string, flags?: number): string;
-  replaceAll(pattern: string, subject: string, replacement: string, flags?: number): string;
+  test(pattern: string, subject: string, flags?: number, options?: MatchOptions): boolean;
+  match(pattern: string, subject: string, flags?: number, options?: MatchOptions): PCRE2Match | null;
+  matchAll(pattern: string, subject: string, flags?: number, options?: MatchOptions): PCRE2Match[];
+  search(pattern: string, subject: string, flags?: number, options?: MatchOptions): number;
+  replace(pattern: string, subject: string, replacement: string, flags?: number, options?: MatchOptions): string;
+  replaceAll(pattern: string, subject: string, replacement: string, flags?: number, options?: MatchOptions): string;
 }
 
 /**
