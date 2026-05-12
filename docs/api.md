@@ -178,6 +178,15 @@ pcre2.patternInfo('(?P<year>\\d{4})-(\\d{2})');
 Returned by [`compile()`](#compile). All methods accept the same
 [`MatchOptions`](#matchoptions) as their one-shot counterparts.
 
+The class itself is exported for `instanceof` checks:
+
+```js
+import { PCRE2Regex } from 'pcre2-wasm';
+
+const re = pcre2.compile('\\d+');
+re instanceof PCRE2Regex;  // true
+```
+
 **Always call [`destroy()`](#destroy) when you are done.** If you forget, the `FinalizationRegistry`
 will clean up when the object is garbage collected, but this is non-deterministic.
 
