@@ -39,6 +39,27 @@ export const REPLACE_FLAGS = {
   LITERAL:       0x00008000,  // Replacement string is plain text; no $-substitution
 };
 
+const _FLAG_MAP = {
+  i: FLAGS.CASELESS,
+  m: FLAGS.MULTILINE,
+  s: FLAGS.DOTALL,
+  x: FLAGS.EXTENDED,
+  u: FLAGS.UTF,
+  U: FLAGS.UCP,
+  A: FLAGS.ANCHORED,
+  D: FLAGS.DOLLAR_ENDONLY,
+  g: 0,  // stateless API — 'g' is silently ignored
+};
+
+export function parseFlags(str) {
+  let out = 0;
+  for (const ch of str) {
+    if (!(ch in _FLAG_MAP)) throw new TypeError(`PCRE2 parseFlags: unknown flag '${ch}'`);
+    out |= _FLAG_MAP[ch];
+  }
+  return out;
+}
+
 /* Extra compile-time flags — passed as the extraFlags argument to compile(). */
 export const EXTRA_FLAGS = {
   ALLOW_LOOKAROUND_BSK: 0x00000040,  // Allow \K inside lookaround assertions
