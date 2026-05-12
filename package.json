@@ -23,7 +23,7 @@
   ],
   "scripts": {
     "build": "make build",
-    "test": "node --test test/index.test.js"
+    "test": "node --test 'test/*.test.js'"
   },
   "keywords": [
     "pcre2",
