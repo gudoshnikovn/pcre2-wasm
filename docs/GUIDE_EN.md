@@ -1,515 +1,411 @@
-# PCRE2 → WASM: Complete Guide
+# PCRE2-WASM: Complete Guide
 
-## Project Structure
+## Overview
+
+`pcre2-wasm` compiles the full [PCRE2](https://github.com/PCRE2Project/pcre2) C library to WebAssembly via Emscripten, then wraps it in a thin JavaScript layer. The result is a Node.js and browser package that gives you the complete PCRE2 regex engine — named groups, Unicode properties, ReDoS protection, substitution — with an ergonomic JS API.
+
+This guide covers two things:
+1. **How the library is built** — for contributors and anyone who wants to understand the internals.
+2. **How to use the library** — the full public API with working examples.
+
+---
+
+## Architecture
 
 ```
-project/
-├── emsdk/              ← Emscripten SDK (clone from GitHub)
-├── pcre2/              ← PCRE2 source code (clone from GitHub)
-├── wasm-build/
-│   ├── pcre2_wrapper.c ← our C wrapper (see below)
-│   ├── pcre2-cmake/    ← created during build
-│   ├── pcre2.js        ← build output (JS glue)
-│   └── pcre2.wasm      ← build output (binary WASM)
-└── your-app/
-    └── public/
-        ├── pcre2.js
-        └── pcre2.wasm
+src/pcre2_wrapper.c       ← C glue between PCRE2 and WASM
+       ↓  emcc
+dist/pcre2.js             ← Emscripten output: ES6 module, WASM inlined
+       ↓
+js/
+  constants.js            ← FLAGS, MATCH_FLAGS, REPLACE_FLAGS, EXTRA_FLAGS
+  errors.js               ← PCRE2CompileError, PCRE2MatchError
+  utils.js                ← encoding helpers, buffer management
+  regex.js                ← PCRE2Regex — compiled regex handle
+  pcre2.js                ← PCRE2 — one-shot API (compile + run + destroy)
+       ↓
+lib/index.js              ← public exports: createPCRE2, FLAGS, …
+lib/index.d.ts            ← TypeScript declarations
+```
+
+The WASM binary is base64-inlined into `dist/pcre2.js` (`SINGLE_FILE=1`), so there is no separate `.wasm` file to serve.
+
+---
+
+## Building from Source
+
+### Prerequisites
+
+- [Emscripten SDK](https://emscripten.org/docs/getting_started/downloads.html) (installed automatically by `make setup`)
+- CMake ≥ 3.14
+- GNU Make
+
+### Steps
+
+```bash
+# 1. Clone the repo
+git clone https://github.com/gudoshnikovn/pcre2-wasm.git
+cd pcre2-wasm
+
+# 2. Fetch dependencies (emsdk + PCRE2 source) and compile
+make build
+```
+
+`make build` does everything in order:
+
+| Step | What happens |
+|------|--------------|
+| Clone `emsdk/` | Fetches Emscripten SDK from GitHub |
+| Install emsdk | Runs `./emsdk install latest && ./emsdk activate latest` |
+| Clone `pcre2/` | Clones PCRE2 at the pinned version tag |
+| `emcmake cmake` | Configures PCRE2 for WASM (8-bit only, no JIT, no tests, static lib) |
+| `emmake make` | Compiles PCRE2 → `build/pcre2-cmake/libpcre2-8.a` |
+| `emcc` link | Links `src/pcre2_wrapper.c` + the static lib → `dist/pcre2.js` |
+
+Only rebuild PCRE2 (`emmake make`) when the PCRE2 version changes. Wrapper-only changes just need the final `emcc` link step, which `make` handles automatically via dependency tracking.
+
+### Useful targets
+
+```bash
+make build      # full build (default)
+make clean      # remove build/ and dist/
+make distclean  # remove build/, dist/, emsdk/, pcre2/
 ```
 
 ---
 
-## Step 1 — Install Emscripten
+## C Layer: src/pcre2_wrapper.c
 
-```bash
-git clone https://github.com/emscripten-core/emsdk.git
-cd emsdk
-./emsdk install latest
-./emsdk activate latest
-source ./emsdk_env.sh
-```
+The wrapper bridges PCRE2's C API to what JavaScript can call via `ccall`. It exports seven functions marked `EMSCRIPTEN_KEEPALIVE`:
 
-Add to `~/.zshrc` or `~/.bashrc` to avoid running this every session:
-```bash
-source ~/path/to/emsdk/emsdk_env.sh
-```
+| Function | Purpose |
+|---|---|
+| `pcre2_wasm_compile` | Compile a pattern → opaque pointer. Accepts compile flags, extra flags, writes error message + offset on failure. |
+| `pcre2_wasm_match` | First match → JSON object written to a caller-provided buffer. |
+| `pcre2_wasm_match_all` | All non-overlapping matches → JSON array. Passing `buf=NULL` just counts without allocating (used by `count()` and `test()`). |
+| `pcre2_wasm_replace` | Regex substitution via `pcre2_substitute`. Supports `$1`, `${name}`, `$$`, global flag. |
+| `pcre2_wasm_pattern_info` | Pattern metadata → JSON object (capture count, named group count, etc.). |
+| `pcre2_wasm_error_message` | Translate a PCRE2 error code to a human-readable string. |
+| `pcre2_wasm_free` | Free the compiled code pointer. |
 
-Verify:
-```bash
-emcc --version
-# emcc (Emscripten) 5.x.x
-```
+### JSON output format
 
----
+`pcre2_wasm_match` and each element of `pcre2_wasm_match_all` produce:
 
-## Step 2 — Clone PCRE2
-
-```bash
-git clone https://github.com/PCRE2Project/pcre2.git
-```
-
----
-
-## Step 3 — Create the C Wrapper
-
-Create file `wasm-build/pcre2_wrapper.c`:
-
-```c
-#define PCRE2_CODE_UNIT_WIDTH 8
-#include <emscripten.h>
-#include <string.h>
-#include <stdlib.h>
-#include "pcre2.h"
-
-// Compiles a pattern. Returns a pointer to the compiled regex, or 0 on error.
-// error_buf — output buffer >= 256 bytes for the error message.
-// error_offset — output pointer to uint32 for the error position in the pattern.
-EMSCRIPTEN_KEEPALIVE
-pcre2_code* pcre2_wasm_compile(const char* pattern, uint32_t flags,
-                                char* error_buf, uint32_t* error_offset) {
-    int errcode = 0;
-    PCRE2_SIZE erroffset = 0;
-    pcre2_code* re = pcre2_compile(
-        (PCRE2_SPTR)pattern, PCRE2_ZERO_TERMINATED,
-        flags, &errcode, &erroffset, NULL
-    );
-    if (!re && error_buf) {
-        pcre2_get_error_message(errcode, (PCRE2_UCHAR*)error_buf, 256);
-        if (error_offset) *error_offset = (uint32_t)erroffset;
-    }
-    return re;
-}
-
-// First match + capture groups. Returns group count or -1 for no match.
-// match_buf receives a JSON array: ["full_match", "group1", "group2", ...]
-EMSCRIPTEN_KEEPALIVE
-int pcre2_wasm_match(pcre2_code* re, const char* subject,
-                     char* match_buf, uint32_t match_buf_size) {
-    if (!re || !subject) return -1;
-
-    PCRE2_SIZE subj_len = strlen(subject);
-    pcre2_match_data* md = pcre2_match_data_create_from_pattern(re, NULL);
-    if (!md) return -48;
-
-    int rc = pcre2_match(re, (PCRE2_SPTR)subject, subj_len, 0, 0, md, NULL);
-
-    if (rc > 0 && match_buf && match_buf_size > 2) {
-        PCRE2_SIZE* ovector = pcre2_get_ovector_pointer(md);
-        uint32_t pos = 0;
-        match_buf[pos++] = '[';
-        for (int i = 0; i < rc; i++) {
-            if (i > 0 && pos < match_buf_size - 1) match_buf[pos++] = ',';
-            PCRE2_SIZE start = ovector[2 * i];
-            PCRE2_SIZE end   = ovector[2 * i + 1];
-            uint32_t len = (uint32_t)(end - start);
-            if (pos + len + 4 >= match_buf_size) break;
-            match_buf[pos++] = '"';
-            memcpy(match_buf + pos, subject + start, len);
-            pos += len;
-            match_buf[pos++] = '"';
-        }
-        if (pos < match_buf_size - 1) match_buf[pos++] = ']';
-        match_buf[pos] = '\0';
-    }
-
-    pcre2_match_data_free(md);
-    return rc;
-}
-
-// Global search — all non-overlapping matches. Returns total count.
-// match_buf receives a JSON array of all full matches: ["m1", "m2", ...]
-EMSCRIPTEN_KEEPALIVE
-int pcre2_wasm_match_all(pcre2_code* re, const char* subject,
-                          char* match_buf, uint32_t match_buf_size) {
-    if (!re || !subject) return -1;
-
-    PCRE2_SIZE subj_len = strlen(subject);
-    pcre2_match_data* md = pcre2_match_data_create_from_pattern(re, NULL);
-    if (!md) return -48;
-
-    uint32_t pos = 0;
-    int total = 0;
-    PCRE2_SIZE offset = 0;
-
-    if (match_buf && match_buf_size > 2) match_buf[pos++] = '[';
-
-    while (offset <= subj_len) {
-        int rc = pcre2_match(re, (PCRE2_SPTR)subject, subj_len, offset, 0, md, NULL);
-        if (rc <= 0) break;
-
-        PCRE2_SIZE* ovector = pcre2_get_ovector_pointer(md);
-        PCRE2_SIZE start = ovector[0];
-        PCRE2_SIZE end   = ovector[1];
-        uint32_t len = (uint32_t)(end - start);
-
-        if (match_buf && pos + len + 5 < match_buf_size) {
-            if (total > 0) match_buf[pos++] = ',';
-            match_buf[pos++] = '"';
-            memcpy(match_buf + pos, subject + start, len);
-            pos += len;
-            match_buf[pos++] = '"';
-        }
-
-        total++;
-        offset = (end > start) ? end : end + 1;
-    }
-
-    if (match_buf && match_buf_size > 2) {
-        match_buf[pos++] = ']';
-        match_buf[pos] = '\0';
-    }
-
-    pcre2_match_data_free(md);
-    return total;
-}
-
-// Frees a compiled regex.
-EMSCRIPTEN_KEEPALIVE
-void pcre2_wasm_free(pcre2_code* re) {
-    if (re) pcre2_code_free(re);
+```json
+{
+  "match": "user@example.com",
+  "index": 5,
+  "groups": ["user", "example.com"],
+  "namedGroups": { "user": "user", "host": "example.com" }
 }
 ```
 
+`namedGroups` is omitted when the pattern has no named captures. Unmatched optional groups are `null`.
+
+### Buffer overflow handling
+
+Both `pcre2_wasm_match` and `pcre2_wasm_match_all` write into a buffer pre-allocated by the JS caller. If the result does not fit, the C function returns the sentinel `-999` (`WASM_BUF_OVERFLOW`). The JS layer (`js/utils.js`) catches this, doubles the buffer, and retries — so callers never need to worry about buffer sizing.
+
+### Match context and limits
+
+`match_limit` and `depth_limit` parameters are forwarded to a `pcre2_match_context`. Both default to 0, which means PCRE2's built-in defaults (effectively unlimited). Pass non-zero values to cap backtracking and recursion depth — essential for ReDoS protection when running user-supplied patterns.
+
+### UTF-8 zero-length match advance
+
+When `matchAll` encounters a zero-length match in UTF-8 mode, the offset is advanced by one byte and then skipped forward past any UTF-8 continuation bytes (`0x80–0xBF`). Without this, `pcre2_match` would receive a mid-codepoint offset and return `PCRE2_ERROR_BADUTFOFFSET`.
+
 ---
 
-## Step 4 — Build PCRE2 with Emscripten
+## JS Layer
+
+### js/constants.js
+
+Defines the four flag groups exported to users:
+
+- `FLAGS` — compile-time flags (CASELESS, UTF, MULTILINE, …)
+- `MATCH_FLAGS` — match-time flags (NOTBOL, NOTEOL, NOTEMPTY, PARTIAL_SOFT, …)
+- `REPLACE_FLAGS` — substitution flags (UNSET_EMPTY, UNKNOWN_UNSET, LITERAL)
+- `EXTRA_FLAGS` — extra compile-time options (ASCII_BSW, MATCH_WORD, …)
+
+Also exports `parseFlags(str)` — converts a string like `'im'` to a bitmask.
+
+### js/errors.js
+
+Two typed error classes:
+
+- `PCRE2CompileError` — thrown by `compile()`. Has `.offset` (character position of the error in the pattern).
+- `PCRE2MatchError` — thrown when `matchLimit` or `depthLimit` is exceeded. Has `.code` (raw PCRE2 error code).
+
+Both extend `Error` and are exported for `instanceof` checks.
+
+### js/utils.js
+
+Internal helpers used by `regex.js`:
+
+- `strToWasm(mod, str)` — encodes a JS string to WASM heap (UTF-8), returns a pointer. Caller must `_free` it.
+- `byteOffsetToCharOffset(str, byteOffset)` — converts a PCRE2 byte offset back to a JS character index. Required because PCRE2 operates on UTF-8 bytes while JS string indices are UTF-16 code units.
+- `charOffsetToByteOffset(str, charOffset)` — inverse, used for `startPos`.
+- `withBuffer(mod, initialSize, fn)` — allocates a buffer, calls `fn(ptr, size)`, and retries with a larger buffer if `fn` returns `WASM_BUF_OVERFLOW`.
+- `throwIfMatchError(mod, rc)` — converts a negative PCRE2 return code into a `PCRE2MatchError`.
+
+### js/regex.js — PCRE2Regex
+
+A compiled regex handle. Holds a pointer to the WASM heap. Provides:
+`test`, `match`, `matchAll`, `matchAllIterator`, `count`, `search`, `replace`, `replaceAll`, `split`, `patternInfo`, `destroy`.
+
+Uses a `FinalizationRegistry` as a safety net: if `destroy()` is never called, the GC will eventually free the WASM memory. Always call `destroy()` explicitly when you are done — GC collection is non-deterministic.
+
+### js/pcre2.js — PCRE2
+
+Stateless one-shot API. Each method compiles the pattern, runs the operation, then calls `destroy()` — no handle to manage. Wraps `PCRE2Regex` internally.
+
+---
+
+## Usage
+
+### Installation
 
 ```bash
-# Make sure emsdk is activated
-source path/to/emsdk/emsdk_env.sh
-
-# Create the cmake build directory
-mkdir -p wasm-build/pcre2-cmake
-
-# Configure (one time only)
-cd wasm-build/pcre2-cmake
-emcmake cmake ../../pcre2 \
-  -DPCRE2_BUILD_PCRE2_8=ON \
-  -DPCRE2_BUILD_PCRE2_16=OFF \
-  -DPCRE2_BUILD_PCRE2_32=OFF \
-  -DPCRE2_BUILD_PCRE2GREP=OFF \
-  -DPCRE2_BUILD_TESTS=OFF \
-  -DPCRE2_SUPPORT_JIT=OFF \
-  -DBUILD_SHARED_LIBS=OFF
-
-# Build
-emmake make -j4
-cd ../..
+npm install pcre2-wasm
 ```
 
-Output: `wasm-build/pcre2-cmake/libpcre2-8.a`
-
----
-
-## Step 5 — Link the Wrapper with the Library
-
-```bash
-emcc wasm-build/pcre2_wrapper.c \
-  wasm-build/pcre2-cmake/libpcre2-8.a \
-  -I pcre2/src \
-  -I wasm-build/pcre2-cmake \
-  -I wasm-build/pcre2-cmake/interface \
-  -o wasm-build/pcre2.js \
-  -s MODULARIZE=1 \
-  -s EXPORT_NAME=PCRE2Module \
-  -s EXPORTED_FUNCTIONS='["_malloc","_free","_pcre2_wasm_compile","_pcre2_wasm_match","_pcre2_wasm_match_all","_pcre2_wasm_free"]' \
-  -s EXPORTED_RUNTIME_METHODS='["cwrap","ccall","UTF8ToString","getValue"]' \
-  -s ALLOW_MEMORY_GROWTH=1 \
-  -s ENVIRONMENT=web \
-  --no-entry \
-  -O2
-```
-
-Output: `wasm-build/pcre2.js` (11KB) + `wasm-build/pcre2.wasm` (408KB)
-
-> Only re-run this step when changing `pcre2_wrapper.c`. Step 4 is only needed when updating PCRE2 itself.
-
----
-
-## PCRE2 Flags
-
-| Constant          | Hex          | Description                          |
-|-------------------|--------------|--------------------------------------|
-| PCRE2_CASELESS    | `0x00000008` | Case-insensitive matching (i)        |
-| PCRE2_MULTILINE   | `0x00000400` | `^`/`$` match start/end of lines (m) |
-| PCRE2_DOTALL      | `0x00000020` | `.` matches `\n` as well (s)         |
-| PCRE2_EXTENDED    | `0x00000080` | Ignore whitespace in pattern (x)     |
-| PCRE2_UTF         | `0x00080000` | Enable UTF-8 support                 |
-
-Flags can be combined with `|`:
-```js
-const flags = 0x00000008 | 0x00000400; // CASELESS + MULTILINE
-```
-
----
-
-## Usage in Plain JS (no framework)
-
-Copy `pcre2.js` and `pcre2.wasm` into your project folder.
-
-### HTML
-
-```html
-<!DOCTYPE html>
-<html>
-<head>
-  <script src="./pcre2.js"></script>
-</head>
-<body>
-  <script src="./app.js" type="module"></script>
-</body>
-</html>
-```
-
-### app.js
+### Initialization
 
 ```js
-// JS wrapper class on top of the raw WASM API
-class PCRE2Regex {
-  #mod; #ptr; #pattern;
+import { createPCRE2 } from 'pcre2-wasm';
 
-  constructor(mod, ptr, pattern) {
-    this.#mod = mod;
-    this.#ptr = ptr;
-    this.#pattern = pattern;
-  }
+const pcre2 = await createPCRE2();
+```
 
-  get pattern() { return this.#pattern; }
+`createPCRE2()` loads and instantiates the WASM module. Call it once and reuse the returned object everywhere — loading takes ~100–300ms.
 
-  test(subject) {
-    return this.#mod.ccall('pcre2_wasm_match_all', 'number',
-      ['number', 'string', 'number', 'number'],
-      [this.#ptr, subject, 0, 0]
-    ) > 0;
-  }
+---
 
-  matchAll(subject) {
-    const m = this.#mod;
-    const bufSize = 64 * 1024;
-    const buf = m._malloc(bufSize);
-    const count = m.ccall('pcre2_wasm_match_all', 'number',
-      ['number', 'string', 'number', 'number'],
-      [this.#ptr, subject, buf, bufSize]
-    );
-    const result = count > 0 ? JSON.parse(m.UTF8ToString(buf)) : [];
-    m._free(buf);
-    return result;
-  }
+### test()
 
-  match(subject) {
-    const m = this.#mod;
-    const bufSize = 64 * 1024;
-    const buf = m._malloc(bufSize);
-    const count = m.ccall('pcre2_wasm_match', 'number',
-      ['number', 'string', 'number', 'number'],
-      [this.#ptr, subject, buf, bufSize]
-    );
-    const result = count > 0 ? JSON.parse(m.UTF8ToString(buf)) : null;
-    m._free(buf);
-    return result; // null | ["full_match", "group1", "group2"]
-  }
+```js
+pcre2.test('\\d+', 'abc 123')    // true
+pcre2.test('\\d+', 'no digits')  // false
+```
 
-  destroy() {
-    if (this.#ptr) {
-      this.#mod.ccall('pcre2_wasm_free', null, ['number'], [this.#ptr]);
-      this.#ptr = 0;
-    }
+### match()
+
+Returns `{ match, index, groups, namedGroups? }` or `null`.
+
+```js
+const r = pcre2.match('(\\w+)@(\\w+)', 'user@example');
+// { match: 'user@example', index: 0, groups: ['user', 'example'] }
+
+pcre2.match('\\d+', 'no digits')  // null
+```
+
+### matchAll()
+
+Returns an array of match objects.
+
+```js
+const r = pcre2.matchAll('\\d+', 'abc 123 def 456');
+// [
+//   { match: '123', index: 4, groups: [] },
+//   { match: '456', index: 12, groups: [] }
+// ]
+```
+
+### matchAllIterator()
+
+Lazy generator — yields one match at a time. Use when you want to stop early or avoid building a full array.
+
+```js
+for (const m of pcre2.matchAllIterator('\\d+', 'a1 b2 c3')) {
+  console.log(m.match);
+  if (m.match === '2') break;  // stops immediately, no extra work
+}
+```
+
+### count()
+
+Counts matches without allocating result objects.
+
+```js
+pcre2.count('\\d+', 'a1 b22 c333')  // 3
+```
+
+### search()
+
+Returns the character index of the first match, or `-1`.
+
+```js
+pcre2.search('\\d+', 'abc 123')   // 4
+pcre2.search('\\d+', 'no digits') // -1
+```
+
+### Named capture groups
+
+```js
+const r = pcre2.match('(?P<year>\\d{4})-(?P<month>\\d{2})', '2024-01');
+r.namedGroups  // { year: '2024', month: '01' }
+r.groups       // ['2024', '01']
+```
+
+### replace() / replaceAll()
+
+```js
+pcre2.replace('\\d+', 'price: 100', 'X')     // 'price: X'
+pcre2.replaceAll('\\d+', '1 and 2', 'N')     // 'N and N'
+
+// Backreferences in replacement
+pcre2.replace('(\\w+)@(\\w+)', 'user@host', '$2/$1')  // 'host/user'
+```
+
+### split()
+
+```js
+pcre2.split(',', 'a,b,c')                     // ['a', 'b', 'c']
+pcre2.split('(,)', 'a,b,c')                   // ['a', ',', 'b', ',', 'c']
+pcre2.split(',', 'a,b,c,d', 2)               // ['a', 'b', 'c,d']
+```
+
+### Compiled regex — compile()
+
+Compile once, use many times. Faster than one-shot calls when the same pattern is used repeatedly.
+
+```js
+const re = pcre2.compile('(\\w+)@(\\w+)');
+
+re.test('user@host')            // true
+re.match('user@host')           // { match: ..., groups: ['user', 'host'] }
+re.matchAll('a@b and c@d')      // array of match objects
+re.replace('a@b', '$2/$1')      // 'b/a'
+
+re.destroy();  // free WASM memory when done
+```
+
+`instanceof` check:
+
+```js
+import { PCRE2Regex } from 'pcre2-wasm';
+
+if (myThing instanceof PCRE2Regex) { /* ... */ }
+```
+
+### patternInfo()
+
+Inspect the compiled pattern without running a match.
+
+```js
+pcre2.patternInfo('(?P<x>\\d+)(\\w)\\1')
+// {
+//   captureCount: 2,
+//   namedGroupCount: 1,
+//   hasBackreferences: true,
+//   minLength: 3,
+//   maxLookbehind: 0
+// }
+```
+
+### Flags
+
+```js
+import { FLAGS, MATCH_FLAGS, EXTRA_FLAGS, parseFlags } from 'pcre2-wasm';
+
+// Compile-time flags (second argument)
+pcre2.match('hello', 'Say HELLO', FLAGS.CASELESS)
+pcre2.match('[а-я]+', 'привет', FLAGS.UTF)
+pcre2.match('\\w+', 'café', FLAGS.UTF | FLAGS.UCP)
+
+// parseFlags — convert a flag string to a bitmask
+pcre2.match('hello', 'Say HELLO', parseFlags('i'))         // FLAGS.CASELESS
+pcre2.matchAll('[а-я]+', 'привет мир', parseFlags('u'))    // FLAGS.UTF
+
+// Match-time flags (via options object)
+pcre2.match('^hello', 'hello world', 0, { matchFlags: MATCH_FLAGS.NOTBOL })
+
+// Extra compile-time flags
+pcre2.compile('\\w+', FLAGS.UCP, { extraFlags: EXTRA_FLAGS.ASCII_BSW })
+```
+
+### ReDoS protection
+
+```js
+import { PCRE2MatchError } from 'pcre2-wasm';
+
+try {
+  pcre2.test('^(a+)+$', 'a'.repeat(20) + 'c', 0, { matchLimit: 10_000 });
+} catch (e) {
+  if (e instanceof PCRE2MatchError) {
+    console.log(e.message);  // 'match limit exceeded'
+    console.log(e.code);     // raw PCRE2 error code (negative integer)
   }
 }
+```
 
-class PCRE2 {
-  #mod;
+Pass `matchLimit` and/or `depthLimit` in the options object of any matching call. Both default to 0 (PCRE2 built-in defaults, effectively unlimited).
 
-  constructor(mod) { this.#mod = mod; }
+### Error handling
 
-  compile(pattern, flags = 0) {
-    const m = this.#mod;
-    const errBuf = m._malloc(256);
-    const errOffBuf = m._malloc(4);
-    const ptr = m.ccall('pcre2_wasm_compile', 'number',
-      ['string', 'number', 'number', 'number'],
-      [pattern, flags, errBuf, errOffBuf]
-    );
-    if (ptr === 0) {
-      const msg = m.UTF8ToString(errBuf);
-      const offset = m.getValue(errOffBuf, 'i32');
-      m._free(errBuf); m._free(errOffBuf);
-      throw new Error(`PCRE2 error at offset ${offset}: ${msg}`);
-    }
-    m._free(errBuf); m._free(errOffBuf);
-    return new PCRE2Regex(m, ptr, pattern);
-  }
+```js
+import { PCRE2CompileError } from 'pcre2-wasm';
 
-  test(pattern, subject, flags = 0) {
-    const re = this.compile(pattern, flags);
-    const result = re.test(subject);
-    re.destroy();
-    return result;
-  }
-
-  matchAll(pattern, subject, flags = 0) {
-    const re = this.compile(pattern, flags);
-    const result = re.matchAll(subject);
-    re.destroy();
-    return result;
+try {
+  pcre2.compile('[unclosed');
+} catch (e) {
+  if (e instanceof PCRE2CompileError) {
+    console.log(e.message);  // 'PCRE2 compile error: ... at offset 9'
+    console.log(e.offset);   // 9 — character position in the pattern
   }
 }
+```
 
-// Initialization — wait for WASM to load
-async function init() {
-  const mod = await PCRE2Module({ locateFile: () => './pcre2.wasm' });
-  return new PCRE2(mod);
-}
+### startPos
 
-// Usage
-init().then((pcre2) => {
-  // One-shot calls (compile + match + destroy handled internally)
-  console.log(pcre2.matchAll('\\d+', 'abc 123 def 456'));
-  // → ["123", "456"]
+Start matching from a character offset without slicing the string. The returned `index` is still relative to the full subject.
 
-  console.log(pcre2.test('\\d+', 'no digits here'));
-  // → false
+```js
+pcre2.match('\\d+', 'abc 123 456', 0, { startPos: 8 })
+// { match: '456', index: 8, groups: [] }
 
-  // Reusable compiled regex
-  const re = pcre2.compile('(\\w+)@(\\w+\\.\\w+)');
-  console.log(re.match('user@example.com'));
-  // → ["user@example.com", "user", "example.com"]
-
-  console.log(re.matchAll('a@b.com and c@d.org'));
-  // → ["a@b.com", "c@d.org"]
-
-  re.destroy(); // free memory when no longer needed
-
-  // With flags
-  const CASELESS = 0x00000008;
-  console.log(pcre2.matchAll('hello', 'Say HELLO world', CASELESS));
-  // → ["HELLO"]
-});
+pcre2.matchAll('\\d+', 'a1 b2 c3', 0, { startPos: 3 })
+// matches '2' and '3', skipping '1'
 ```
 
 ---
 
-## Usage in React (Vite)
+## Usage in a Browser (Vite / webpack)
 
-Copy `pcre2.js` and `pcre2.wasm` into the `public/` folder of your Vite project.
-
-### src/usePCRE2.js
+Install and import normally:
 
 ```js
+import { createPCRE2, FLAGS } from 'pcre2-wasm';
+
+const pcre2 = await createPCRE2();
+const r = pcre2.match('\\d+', 'price: 42');
+console.log(r.match);  // '42'
+```
+
+The WASM is inlined in the JS bundle — no extra `.wasm` file to host.
+
+### React hook
+
+```js
+// usePCRE2.js
 import { useState, useEffect, useRef } from 'react';
-
-class PCRE2Regex {
-  #mod; #ptr; #pattern;
-
-  constructor(mod, ptr, pattern) {
-    this.#mod = mod;
-    this.#ptr = ptr;
-    this.#pattern = pattern;
-  }
-
-  get pattern() { return this.#pattern; }
-
-  test(subject) {
-    return this.#mod.ccall('pcre2_wasm_match_all', 'number',
-      ['number', 'string', 'number', 'number'],
-      [this.#ptr, subject, 0, 0]
-    ) > 0;
-  }
-
-  matchAll(subject) {
-    const m = this.#mod;
-    const bufSize = 64 * 1024;
-    const buf = m._malloc(bufSize);
-    const count = m.ccall('pcre2_wasm_match_all', 'number',
-      ['number', 'string', 'number', 'number'],
-      [this.#ptr, subject, buf, bufSize]
-    );
-    const result = count > 0 ? JSON.parse(m.UTF8ToString(buf)) : [];
-    m._free(buf);
-    return result;
-  }
-
-  match(subject) {
-    const m = this.#mod;
-    const bufSize = 64 * 1024;
-    const buf = m._malloc(bufSize);
-    const count = m.ccall('pcre2_wasm_match', 'number',
-      ['number', 'string', 'number', 'number'],
-      [this.#ptr, subject, buf, bufSize]
-    );
-    const result = count > 0 ? JSON.parse(m.UTF8ToString(buf)) : null;
-    m._free(buf);
-    return result; // null | ["full_match", "group1", "group2"]
-  }
-
-  destroy() {
-    if (this.#ptr) {
-      this.#mod.ccall('pcre2_wasm_free', null, ['number'], [this.#ptr]);
-      this.#ptr = 0;
-    }
-  }
-}
-
-class PCRE2 {
-  #mod;
-
-  constructor(mod) { this.#mod = mod; }
-
-  compile(pattern, flags = 0) {
-    const m = this.#mod;
-    const errBuf = m._malloc(256);
-    const errOffBuf = m._malloc(4);
-    const ptr = m.ccall('pcre2_wasm_compile', 'number',
-      ['string', 'number', 'number', 'number'],
-      [pattern, flags, errBuf, errOffBuf]
-    );
-    if (ptr === 0) {
-      const msg = m.UTF8ToString(errBuf);
-      const offset = m.getValue(errOffBuf, 'i32');
-      m._free(errBuf); m._free(errOffBuf);
-      throw new Error(`PCRE2 error at offset ${offset}: ${msg}`);
-    }
-    m._free(errBuf); m._free(errOffBuf);
-    return new PCRE2Regex(m, ptr, pattern);
-  }
-
-  test(pattern, subject, flags = 0) {
-    const re = this.compile(pattern, flags);
-    const result = re.test(subject);
-    re.destroy();
-    return result;
-  }
-
-  matchAll(pattern, subject, flags = 0) {
-    const re = this.compile(pattern, flags);
-    const result = re.matchAll(subject);
-    re.destroy();
-    return result;
-  }
-}
+import { createPCRE2 } from 'pcre2-wasm';
 
 export function usePCRE2() {
   const [ready, setReady] = useState(false);
-  const pcre2 = useRef(null);
+  const ref = useRef(null);
 
   useEffect(() => {
-    const script = document.createElement('script');
-    script.src = '/pcre2.js';
-    script.onload = () => {
-      window.PCRE2Module({ locateFile: () => '/pcre2.wasm' }).then((mod) => {
-        pcre2.current = new PCRE2(mod);
-        setReady(true);
-      });
-    };
-    document.head.appendChild(script);
-    return () => document.head.removeChild(script);
+    createPCRE2().then((pcre2) => {
+      ref.current = pcre2;
+      setReady(true);
+    });
   }, []);
 
-  return { ready, pcre2: pcre2.current };
+  return { ready, pcre2: ref.current };
 }
 ```
-
-### Usage in a component
 
 ```jsx
 import { usePCRE2 } from './usePCRE2';
@@ -517,110 +413,71 @@ import { usePCRE2 } from './usePCRE2';
 export default function MyComponent() {
   const { ready, pcre2 } = usePCRE2();
 
-  function handleMatch() {
-    if (!ready) return;
-
-    // One-shot
-    const matches = pcre2.matchAll('\\d+', 'price: 100, qty: 5');
-    console.log(matches); // ["100", "5"]
-
-    // With flags
-    const CASELESS = 0x00000008;
-    const found = pcre2.test('hello', 'Say HELLO!', CASELESS);
-    console.log(found); // true
-
-    // Compiled regex for reuse
-    const re = pcre2.compile('(\\w+)=(\\w+)');
-    console.log(re.match('foo=bar'));     // ["foo=bar", "foo", "bar"]
-    console.log(re.matchAll('a=1 b=2')); // ["a=1", "b=2"]
-    re.destroy();
+  function run() {
+    const matches = pcre2.matchAll('\\d+', 'prices: 10, 20, 30');
+    console.log(matches.map((m) => m.match));  // ['10', '20', '30']
   }
 
-  if (!ready) return <p>Loading PCRE2...</p>;
-
-  return <button onClick={handleMatch}>Run</button>;
+  if (!ready) return <p>Loading…</p>;
+  return <button onClick={run}>Run</button>;
 }
 ```
 
 ---
 
-## Usage in a Service (initialize once)
+## Singleton Pattern
 
-The WASM module takes ~100–300ms to load. In a real application, initialize it once at startup and reuse it everywhere via a singleton.
-
-### pcre2Service.js
+Initialize once at app startup; all modules share the same instance.
 
 ```js
-let pcre2Instance = null;
-let initPromise = null;
+// pcre2.js — import this everywhere instead of calling createPCRE2() directly
+import { createPCRE2 } from 'pcre2-wasm';
 
-export async function getPCRE2() {
-  if (pcre2Instance) return pcre2Instance; // already ready — instant
-  if (initPromise) return initPromise;     // loading — wait for the same promise
-
-  initPromise = new Promise((resolve) => {
-    const script = document.createElement('script');
-    script.src = '/pcre2.js';
-    script.onload = () => {
-      window.PCRE2Module({ locateFile: () => '/pcre2.wasm' }).then((mod) => {
-        pcre2Instance = new PCRE2(mod);
-        resolve(pcre2Instance);
-      });
-    };
-    document.head.appendChild(script);
-  });
-
-  return initPromise;
-}
+const _promise = createPCRE2();
+export const getPCRE2 = () => _promise;
 ```
 
-Call from anywhere in the app:
 ```js
-const pcre2 = await getPCRE2(); // first call waits for load, subsequent calls are instant
-pcre2.matchAll('\\d+', text);
+// anywhere in the app
+import { getPCRE2 } from './pcre2.js';
+
+const pcre2 = await getPCRE2();
+pcre2.test('\\d+', userInput);
 ```
 
 ### Caching compiled patterns
 
-If the same patterns are used repeatedly — compile them once too:
+If the same patterns are used throughout the app, compile them once at startup:
 
 ```js
-// patterns.js — initialized once at startup
-let patterns = null;
+// patterns.js
+import { getPCRE2 } from './pcre2.js';
+
+let _patterns = null;
 
 export async function getPatterns() {
-  if (patterns) return patterns;
+  if (_patterns) return _patterns;
   const pcre2 = await getPCRE2();
-  patterns = {
-    email: pcre2.compile('\\w+@\\w+\\.\\w+'),
+  _patterns = {
+    email: pcre2.compile('[\\w.+-]+@[\\w-]+\\.[\\w.]+'),
     phone: pcre2.compile('\\+?\\d[\\d\\s\\-]{7,}\\d'),
     url:   pcre2.compile('https?://[^\\s]+'),
   };
-  return patterns;
+  return _patterns;
+  // No destroy() — these live for the entire app lifetime
 }
-
-// No need to call destroy() — these live for the entire lifetime of the app
 ```
 
 ---
 
 ## When to call destroy()
 
-| What | When to destroy |
-|------|----------------|
-| WASM module | Never — lives for the entire app lifetime |
-| `compile()` for a permanent pattern | Never — cache and reuse it |
-| `compile()` for a one-off pattern | Immediately after use |
-| `pcre2.matchAll()` / `pcre2.test()` shortcuts | Not needed — handled automatically |
+| Situation | Action |
+|-----------|--------|
+| `compile()` result used permanently (cached pattern) | Never destroy — let it live |
+| `compile()` result used temporarily | Call `destroy()` when done |
+| One-shot `pcre2.match()`, `pcre2.test()`, etc. | Nothing — handled internally |
 
-Simple rule: if you called `compile()` yourself — it's your responsibility to call `destroy()`. If you use the `pcre2.matchAll()` / `pcre2.test()` shortcuts — they clean up internally.
+Simple rule: if you called `compile()` yourself, you own the handle and must call `destroy()`. One-shot calls on the `pcre2` object manage memory automatically.
 
----
-
-## Notes
-
-**64KB buffer** — maximum total size of all matches in a single call. Increase `bufSize` in the class if you expect very large results.
-
-**`match()` vs `matchAll()`**:
-- `match(subject)` — first match + capture groups → `["full", "g1", "g2"]`
-- `matchAll(subject)` — all full matches → `["m1", "m2", "m3"]`
+`destroy()` is idempotent — calling it multiple times is safe.
