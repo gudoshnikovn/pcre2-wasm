@@ -253,6 +253,11 @@ int pcre2_wasm_match_all(pcre2_code* re, const char* subject,
     NameTable nt;
     if (write_json) nt_load(re, &nt);
 
+    /* Detect UTF-8 mode once; needed to advance past zero-length matches safely. */
+    uint32_t allopts = 0;
+    pcre2_pattern_info(re, PCRE2_INFO_ALLOPTIONS, &allopts);
+    int utf_mode = (allopts & PCRE2_UTF) != 0;
+
     JsonBuf b = { match_buf, 0, match_buf_size, 0 };
     if (write_json) jb_char(&b, '[');
 
@@ -295,7 +300,19 @@ int pcre2_wasm_match_all(pcre2_code* re, const char* subject,
         }
 
         total++;
-        offset = (end > start) ? end : end + 1;
+        if (end > start) {
+            offset = end;
+        } else {
+            offset = end + 1;
+            if (utf_mode) {
+                /* Skip UTF-8 continuation bytes (0x80–0xBF) to reach the next
+                   valid codepoint boundary. Without this, pcre2_match returns
+                   PCRE2_ERROR_BADUTFOFFSET (-36) on the following iteration. */
+                while (offset < subj_len &&
+                       ((unsigned char)subject[offset] & 0xC0) == 0x80)
+                    offset++;
+            }
+        }
     }
 
     if (mctx) pcre2_match_context_free(mctx);
