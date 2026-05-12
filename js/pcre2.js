@@ -69,6 +69,19 @@ export class PCRE2 {
     return this.#oneShot(pattern, flags, extraFlags, re => re.matchAll(subject, opts));
   }
 
+  *matchAllIterator(pattern, subject, flags = 0, opts = {}, extraFlags = 0) {
+    const re = this.compile(pattern, flags, extraFlags);
+    try {
+      yield* re.matchAllIterator(subject, opts);
+    } finally {
+      re.destroy();
+    }
+  }
+
+  count(pattern, subject, flags = 0, opts = {}, extraFlags = 0) {
+    return this.#oneShot(pattern, flags, extraFlags, re => re.count(subject, opts));
+  }
+
   search(pattern, subject, flags = 0, opts = {}, extraFlags = 0) {
     return this.#oneShot(pattern, flags, extraFlags, re => re.search(subject, opts));
   }

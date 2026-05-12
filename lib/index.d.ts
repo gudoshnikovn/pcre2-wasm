@@ -180,6 +180,12 @@ export declare class PCRE2Regex {
   /** Returns all non-overlapping matches. */
   matchAll(subject: string, options?: MatchOptions): PCRE2Match[];
 
+  /** Lazy generator — yields one match at a time; early break stops matching immediately. */
+  matchAllIterator(subject: string, options?: MatchOptions): Generator<PCRE2Match>;
+
+  /** Returns the number of non-overlapping matches without allocating match results. */
+  count(subject: string, options?: MatchOptions): number;
+
   /** Returns the character offset of the first match, or -1 if no match. */
   search(subject: string, options?: MatchOptions): number;
 
@@ -218,6 +224,8 @@ export declare class PCRE2 {
   test(pattern: string, subject: string, flags?: number, options?: MatchOptions, extraFlags?: number): boolean;
   match(pattern: string, subject: string, flags?: number, options?: MatchOptions, extraFlags?: number): PCRE2Match | null;
   matchAll(pattern: string, subject: string, flags?: number, options?: MatchOptions, extraFlags?: number): PCRE2Match[];
+  matchAllIterator(pattern: string, subject: string, flags?: number, options?: MatchOptions, extraFlags?: number): Generator<PCRE2Match>;
+  count(pattern: string, subject: string, flags?: number, options?: MatchOptions, extraFlags?: number): number;
   search(pattern: string, subject: string, flags?: number, options?: MatchOptions, extraFlags?: number): number;
   replace(pattern: string, subject: string, replacement: string, flags?: number, options?: MatchOptions, extraFlags?: number): string;
   replaceAll(pattern: string, subject: string, replacement: string, flags?: number, options?: MatchOptions, extraFlags?: number): string;

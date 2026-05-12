@@ -82,6 +82,18 @@ export class PCRE2Regex {
     }
   }
 
+  /* Lazy generator — yields one match at a time, stopping on break. */
+  *matchAllIterator(subject, opts = {}) {
+    let startPos = opts.startPos ?? 0;
+    while (true) {
+      const m = this.match(subject, { ...opts, startPos });
+      if (!m) break;
+      yield m;
+      startPos = m.index + (m.match.length || 1);
+      if (startPos > subject.length) break;
+    }
+  }
+
   /* Returns all non-overlapping matches as an array of match objects. */
   matchAll(subject, { matchLimit = 0, depthLimit = 0, startPos = 0, matchFlags = 0 } = {}) {
     const m = this.#mod;
@@ -102,6 +114,21 @@ export class PCRE2Regex {
     } finally {
       m._free(subjectPtr);
     }
+  }
+
+  /* Returns the number of non-overlapping matches without allocating results. */
+  count(subject, { matchLimit = 0, depthLimit = 0, startPos = 0, matchFlags = 0 } = {}) {
+    const m = this.#mod;
+    const subjectPtr = strToWasm(m, subject);
+    const startByte  = charOffsetToByteOffset(subject, startPos);
+    const rc = m.ccall(
+      'pcre2_wasm_match_all', 'number',
+      ['number', 'number', 'number', 'number', 'number', 'number', 'number', 'number'],
+      [this.#ptr, subjectPtr, 0, 0, matchLimit, depthLimit, startByte, matchFlags]
+    );
+    m._free(subjectPtr);
+    throwIfMatchError(m, rc);
+    return rc;
   }
 
   /* Returns the character offset of the first match, or -1 if no match. */
