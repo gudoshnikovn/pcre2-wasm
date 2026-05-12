@@ -17,8 +17,8 @@ import { createPCRE2 } from 'pcre2-wasm';
 const pcre2 = await createPCRE2();
 
 // test — does the pattern match?
-pcre2.test('\\d+', 'price: 42');          // true
-pcre2.test('\\d+', 'no digits here');     // false
+pcre2.test('\\d+', 'price: 42'); // true
+pcre2.test('\\d+', 'no digits here'); // false
 
 // match — first match with capture groups
 pcre2.match('(\\w+)@(\\w+)', 'user@example.com');
@@ -33,18 +33,18 @@ pcre2.matchAll('\\d+', 'a1 b22 c333');
 // ]
 
 // replace / replaceAll
-pcre2.replace('\\d+', 'price: 42 qty: 5', 'N');     // 'price: N qty: 5'
-pcre2.replaceAll('\\d+', 'price: 42 qty: 5', 'N');   // 'price: N qty: N'
+pcre2.replace('\\d+', 'price: 42 qty: 5', 'N'); // 'price: N qty: 5'
+pcre2.replaceAll('\\d+', 'price: 42 qty: 5', 'N'); // 'price: N qty: N'
 
 // search — index of first match, or -1
-pcre2.search('\\d+', 'abc 123');   // 4
+pcre2.search('\\d+', 'abc 123'); // 4
 pcre2.search('\\d+', 'no digits'); // -1
 
 // count — number of matches, no allocation
-pcre2.count('\\d+', 'a1 b22 c333');  // 3
+pcre2.count('\\d+', 'a1 b22 c333'); // 3
 
 // split — split subject by pattern
-pcre2.split(',\\s*', 'one, two, three');  // ['one', 'two', 'three']
+pcre2.split(',\\s*', 'one, two, three'); // ['one', 'two', 'three']
 ```
 
 ## Flags
@@ -55,17 +55,17 @@ import { createPCRE2, FLAGS, parseFlags } from 'pcre2-wasm';
 const pcre2 = await createPCRE2();
 
 // Using FLAG constants
-pcre2.test('hello', 'HELLO world', FLAGS.CASELESS);                      // true
-pcre2.matchAll('^\\w+', 'foo\nbar\nbaz', FLAGS.MULTILINE);               // ['foo', 'bar', 'baz']
-pcre2.test('hello', 'HÉLLO', FLAGS.CASELESS | FLAGS.UTF | FLAGS.UCP);    // true
+pcre2.test('hello', 'HELLO world', FLAGS.CASELESS); // true
+pcre2.matchAll('^\\w+', 'foo\nbar\nbaz', FLAGS.MULTILINE); // ['foo', 'bar', 'baz']
+pcre2.test('hello', 'HÉLLO', FLAGS.CASELESS | FLAGS.UTF | FLAGS.UCP); // true
 
 // Using parseFlags — convert a string like 'gi' to a bitmask
-pcre2.test('hello', 'HELLO world', parseFlags('i'));                      // true
-pcre2.matchAll('^\\w+', 'foo\nbar', parseFlags('mg'));                    // ['foo', 'bar']
+pcre2.test('hello', 'HELLO world', parseFlags('i')); // true
+pcre2.matchAll('^\\w+', 'foo\nbar', parseFlags('mg')); // ['foo', 'bar']
 ```
 
 | Letter | Flag constant          | Description                            |
-|--------|------------------------|----------------------------------------|
+| ------ | ---------------------- | -------------------------------------- |
 | `i`    | `FLAGS.CASELESS`       | Case-insensitive                       |
 | `m`    | `FLAGS.MULTILINE`      | `^`/`$` match line boundaries          |
 | `s`    | `FLAGS.DOTALL`         | `.` matches newline                    |
@@ -74,7 +74,7 @@ pcre2.matchAll('^\\w+', 'foo\nbar', parseFlags('mg'));                    // ['f
 | `U`    | `FLAGS.UCP`            | Unicode properties, auto-enables UTF   |
 | `A`    | `FLAGS.ANCHORED`       | Match only at start of subject         |
 | `D`    | `FLAGS.DOLLAR_ENDONLY` | `$` matches only at end of string      |
-| `g`    | *(ignored)*            | No-op — the API is stateless           |
+| `g`    | _(ignored)_            | No-op — the API is stateless           |
 
 ## Compiled patterns
 
@@ -83,11 +83,11 @@ Compile once, reuse many times. Faster when the same pattern is used repeatedly.
 ```js
 const re = pcre2.compile('(\\w+)@(\\w+\\.\\w+)');
 
-re.test('user@example.com');       // true
-re.match('user@example.com');      // { match: 'user@example.com', ... }
-re.matchAll('a@b.com c@d.org');    // [{ match: 'a@b.com', ... }, ...]
-re.count('a@b.com c@d.org');       // 2
-re.replace('x@y.com', '[email]');  // '[email]'
+re.test('user@example.com'); // true
+re.match('user@example.com'); // { match: 'user@example.com', ... }
+re.matchAll('a@b.com c@d.org'); // [{ match: 'a@b.com', ... }, ...]
+re.count('a@b.com c@d.org'); // 2
+re.replace('x@y.com', '[email]'); // '[email]'
 
 re.destroy(); // free WASM memory when done
 ```
@@ -98,7 +98,7 @@ Memory-efficient alternative to `matchAll()` for large subjects or early exits.
 
 ```js
 for (const m of pcre2.matchAllIterator('\\d+', subject)) {
-  if (m.match === 'stop') break;   // stops immediately — no wasted work
+  if (m.match === 'stop') break; // stops immediately — no wasted work
   process(m);
 }
 ```
@@ -155,7 +155,7 @@ function MyComponent() {
   if (!ready) return <p>Loading…</p>;
 
   const matches = pcre2.matchAll('\\d+', 'price: 100 qty: 5');
-  return <p>{matches.map(m => m.match).join(', ')}</p>;
+  return <p>{matches.map((m) => m.match).join(', ')}</p>;
 }
 ```
 
@@ -194,10 +194,10 @@ cd pcre2-wasm
 make
 ```
 
-| Command          | Description                               |
-|------------------|-------------------------------------------|
-| `make`           | Full build (setup + compile)              |
-| `make build`     | Compile WASM (assumes setup already done) |
-| `make clean`     | Remove build artifacts                    |
+| Command      | Description                               |
+| ------------ | ----------------------------------------- |
+| `make`       | Full build (setup + compile)              |
+| `make build` | Compile WASM (assumes setup already done) |
+| `make clean` | Remove build artifacts                    |
 
 See [docs/GUIDE_EN.md](docs/GUIDE_EN.md) for the full build walkthrough.

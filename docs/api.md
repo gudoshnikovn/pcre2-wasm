@@ -42,7 +42,7 @@ You must call [`destroy()`](#destroy) when done.
 
 ```js
 const re = pcre2.compile('\\d+');
-re.matchAll('a1 b22 c333');  // [{ match: '1', ... }, ...]
+re.matchAll('a1 b22 c333'); // [{ match: '1', ... }, ...]
 re.destroy();
 ```
 
@@ -53,9 +53,9 @@ Throws [`PCRE2CompileError`](#pcre2compileerror) if the pattern is invalid.
 Returns `true` if the pattern matches anywhere in `subject`.
 
 ```js
-pcre2.test('\\d+', 'abc 123');       // true
-pcre2.test('\\d+', 'no digits');     // false
-pcre2.test('hello', 'HELLO', FLAGS.CASELESS);  // true
+pcre2.test('\\d+', 'abc 123'); // true
+pcre2.test('\\d+', 'no digits'); // false
+pcre2.test('hello', 'HELLO', FLAGS.CASELESS); // true
 ```
 
 ### `match(pattern, subject, flags?, options?, extraFlags?): PCRE2Match | null`
@@ -66,7 +66,7 @@ Returns the first match as a [`PCRE2Match`](#pcre2match) object, or `null` if no
 pcre2.match('(\\w+)@(\\w+)', 'user@example.com');
 // { match: 'user@example.com', index: 0, groups: ['user', 'example'] }
 
-pcre2.match('\\d+', 'no digits');  // null
+pcre2.match('\\d+', 'no digits'); // null
 ```
 
 ### `matchAll(pattern, subject, flags?, options?, extraFlags?): PCRE2Match[]`
@@ -86,6 +86,7 @@ pcre2.matchAll('\\d+', 'a1 b22 c333');
 ### `matchAllIterator(pattern, subject, flags?, options?, extraFlags?): Generator<PCRE2Match>`
 
 Lazy alternative to `matchAll()` — yields one match at a time. Use when:
+
 - The subject is large and you don't need all matches at once.
 - You may exit early with `break`.
 
@@ -93,7 +94,7 @@ The compiled regex is destroyed automatically when the loop completes or when th
 
 ```js
 for (const m of pcre2.matchAllIterator('\\d+', 'a1 b22 c333')) {
-  console.log(m.match);  // '1', then '22', then '333'
+  console.log(m.match); // '1', then '22', then '333'
 }
 
 // Early exit — stops after the second match, no further matching is done
@@ -109,8 +110,8 @@ Returns the number of non-overlapping matches without allocating match result ob
 More efficient than `matchAll().length` when you only need a count.
 
 ```js
-pcre2.count('\\d+', 'a1 b22 c333');  // 3
-pcre2.count('\\d+', 'no digits');    // 0
+pcre2.count('\\d+', 'a1 b22 c333'); // 3
+pcre2.count('\\d+', 'no digits'); // 0
 ```
 
 ### `search(pattern, subject, flags?, options?, extraFlags?): number`
@@ -118,7 +119,7 @@ pcre2.count('\\d+', 'no digits');    // 0
 Returns the character index of the first match, or `-1` if no match.
 
 ```js
-pcre2.search('\\d+', 'abc 123');   // 4
+pcre2.search('\\d+', 'abc 123'); // 4
 pcre2.search('\\d+', 'no digits'); // -1
 ```
 
@@ -128,16 +129,16 @@ Replaces the **first** match and returns the resulting string.
 
 **Replacement syntax:**
 
-| Token       | Meaning                        |
-|-------------|--------------------------------|
-| `$0` or `$&` | Whole match                   |
-| `$1`…`$n`   | Numbered capture group         |
-| `${name}`   | Named capture group            |
-| `$$`        | Literal `$`                    |
+| Token        | Meaning                |
+| ------------ | ---------------------- |
+| `$0` or `$&` | Whole match            |
+| `$1`…`$n`    | Numbered capture group |
+| `${name}`    | Named capture group    |
+| `$$`         | Literal `$`            |
 
 ```js
-pcre2.replace('(\\w+)', 'hello world', '[$1]');  // '[hello] world'
-pcre2.replace('\\d+', 'price: 42', 'N');         // 'price: N'
+pcre2.replace('(\\w+)', 'hello world', '[$1]'); // '[hello] world'
+pcre2.replace('\\d+', 'price: 42', 'N'); // 'price: N'
 ```
 
 ### `replaceAll(pattern, subject, replacement, flags?, options?, extraFlags?): string`
@@ -145,8 +146,8 @@ pcre2.replace('\\d+', 'price: 42', 'N');         // 'price: N'
 Same as `replace()` but replaces all non-overlapping matches.
 
 ```js
-pcre2.replaceAll('\\d+', 'a1 b22 c333', 'N');   // 'aN bNN cNNN' — no, actually:
-pcre2.replaceAll('\\d+', 'a1 b22 c333', 'N');   // 'aN bN cN'
+pcre2.replaceAll('\\d+', 'a1 b22 c333', 'N'); // 'aN bNN cNNN' — no, actually:
+pcre2.replaceAll('\\d+', 'a1 b22 c333', 'N'); // 'aN bN cN'
 ```
 
 ### `split(pattern, subject, limit?, flags?, options?, extraFlags?): (string | undefined)[]`
@@ -155,9 +156,9 @@ Splits `subject` by the pattern. If the pattern contains capture groups, the cap
 included between the surrounding parts (same behaviour as `String.prototype.split` with `RegExp`).
 
 ```js
-pcre2.split(',\\s*', 'one, two, three');          // ['one', 'two', 'three']
-pcre2.split('(,)', 'a,b,c');                      // ['a', ',', 'b', ',', 'c']
-pcre2.split(',\\s*', 'one, two, three', 2);       // ['one', 'two, three']
+pcre2.split(',\\s*', 'one, two, three'); // ['one', 'two', 'three']
+pcre2.split('(,)', 'a,b,c'); // ['a', ',', 'b', ',', 'c']
+pcre2.split(',\\s*', 'one, two, three', 2); // ['one', 'two, three']
 ```
 
 Unmatched optional groups appear as `undefined` in the result, matching JS native behaviour.
@@ -184,7 +185,7 @@ The class itself is exported for `instanceof` checks:
 import { PCRE2Regex } from 'pcre2-wasm';
 
 const re = pcre2.compile('\\d+');
-re instanceof PCRE2Regex;  // true
+re instanceof PCRE2Regex; // true
 ```
 
 **Always call [`destroy()`](#destroy) when you are done.** If you forget, the `FinalizationRegistry`
@@ -231,16 +232,16 @@ Converts a flag string (like `'gi'` or `'imsu'`) to a numeric bitmask suitable f
 ```js
 import { parseFlags } from 'pcre2-wasm';
 
-parseFlags('i')    // FLAGS.CASELESS
-parseFlags('im')   // FLAGS.CASELESS | FLAGS.MULTILINE
-parseFlags('g')    // 0  — silently ignored, the API is stateless
-parseFlags('')     // 0
+parseFlags('i'); // FLAGS.CASELESS
+parseFlags('im'); // FLAGS.CASELESS | FLAGS.MULTILINE
+parseFlags('g'); // 0  — silently ignored, the API is stateless
+parseFlags(''); // 0
 ```
 
 Throws `TypeError` for any unrecognised letter.
 
 | Letter | Mapped to              |
-|--------|------------------------|
+| ------ | ---------------------- |
 | `i`    | `FLAGS.CASELESS`       |
 | `m`    | `FLAGS.MULTILINE`      |
 | `s`    | `FLAGS.DOTALL`         |
@@ -266,14 +267,14 @@ try {
   pcre2.compile('[unclosed');
 } catch (e) {
   if (e instanceof PCRE2CompileError) {
-    console.error(e.message);  // 'PCRE2 compile error at offset 9: ...'
-    console.error(e.offset);   // 9 — character position in the pattern
+    console.error(e.message); // 'PCRE2 compile error at offset 9: ...'
+    console.error(e.offset); // 9 — character position in the pattern
   }
 }
 ```
 
 | Property  | Type     | Description                                          |
-|-----------|----------|------------------------------------------------------|
+| --------- | -------- | ---------------------------------------------------- |
 | `message` | `string` | Human-readable error description including offset    |
 | `offset`  | `number` | Character position in the pattern where error starts |
 | `name`    | `string` | `'PCRE2CompileError'`                                |
@@ -292,17 +293,17 @@ try {
   pcre2.test('^(a+)+$', 'aaaa...c', 0, { matchLimit: 10_000 });
 } catch (e) {
   if (e instanceof PCRE2MatchError) {
-    console.warn(e.message);  // 'PCRE2 match error: match limit exceeded'
-    console.warn(e.code);     // -47 — raw PCRE2 error code
+    console.warn(e.message); // 'PCRE2 match error: match limit exceeded'
+    console.warn(e.code); // -47 — raw PCRE2 error code
   }
 }
 ```
 
-| Property  | Type     | Description                                    |
-|-----------|----------|------------------------------------------------|
-| `message` | `string` | Human-readable error description               |
-| `code`    | `number` | Raw PCRE2 error code (negative integer)        |
-| `name`    | `string` | `'PCRE2MatchError'`                            |
+| Property  | Type     | Description                             |
+| --------- | -------- | --------------------------------------- |
+| `message` | `string` | Human-readable error description        |
+| `code`    | `number` | Raw PCRE2 error code (negative integer) |
+| `name`    | `string` | `'PCRE2MatchError'`                     |
 
 `PCRE2MatchError` extends `Error`.
 
@@ -314,11 +315,11 @@ Optional object accepted by all match, replace, split, and count methods.
 
 ```ts
 interface MatchOptions {
-  matchLimit?:   number;  // max backtracking steps (0 = no extra limit)
-  depthLimit?:   number;  // max backtracking stack depth (0 = no extra limit)
-  startPos?:     number;  // character offset to start matching from (default 0)
-  matchFlags?:   number;  // bitwise OR of MATCH_FLAGS constants
-  replaceFlags?: number;  // bitwise OR of REPLACE_FLAGS constants (replace/replaceAll only)
+  matchLimit?: number; // max backtracking steps (0 = no extra limit)
+  depthLimit?: number; // max backtracking stack depth (0 = no extra limit)
+  startPos?: number; // character offset to start matching from (default 0)
+  matchFlags?: number; // bitwise OR of MATCH_FLAGS constants
+  replaceFlags?: number; // bitwise OR of REPLACE_FLAGS constants (replace/replaceAll only)
 }
 ```
 
@@ -366,11 +367,11 @@ The object returned by `match()` and yielded by `matchAll()` / `matchAllIterator
 
 ```ts
 interface PCRE2Match {
-  match:        string;                       // the matched substring
-  index:        number;                       // character offset in the subject
-  groups:       (string | null)[];            // capture groups (index 0 = first group)
+  match: string; // the matched substring
+  index: number; // character offset in the subject
+  groups: (string | null)[]; // capture groups (index 0 = first group)
   namedGroups?: Record<string, string | null>; // only present when pattern has named groups
-  partial?:     true;                         // only present on partial matches
+  partial?: true; // only present on partial matches
 }
 ```
 
@@ -390,11 +391,11 @@ Returned by `patternInfo()`.
 
 ```ts
 interface PCRE2PatternInfo {
-  captureCount:      number;        // total number of capture groups
-  namedGroupCount:   number;        // number of named capture groups
-  hasBackreferences: boolean;       // true if the pattern uses \1, \k<name>, etc.
-  minLength:         number | null; // minimum subject length that could match, or null
-  maxLookbehind:     number;        // maximum lookbehind length (0 if none)
+  captureCount: number; // total number of capture groups
+  namedGroupCount: number; // number of named capture groups
+  hasBackreferences: boolean; // true if the pattern uses \1, \k<name>, etc.
+  minLength: number | null; // minimum subject length that could match, or null
+  maxLookbehind: number; // maximum lookbehind length (0 if none)
 }
 ```
 
@@ -411,37 +412,37 @@ pcre2.patternInfo('(?P<year>\\d{4})-(\\w)\\1');
 
 Compile-time flags. Pass as the `flags` argument to any method or to `parseFlags()`.
 
-| Constant                 | Description                                                    |
-|--------------------------|----------------------------------------------------------------|
-| `FLAGS.CASELESS`         | Case-insensitive matching (`(?i)`)                             |
-| `FLAGS.MULTILINE`        | `^`/`$` match at line boundaries (`(?m)`)                      |
-| `FLAGS.DOTALL`           | `.` matches any character including newline (`(?s)`)           |
-| `FLAGS.EXTENDED`         | Ignore unescaped whitespace in pattern (`(?x)`)                |
-| `FLAGS.UTF`              | Treat pattern and subject as UTF-8                             |
-| `FLAGS.UCP`              | Unicode properties for `\d`, `\w`, `\s`, `\b`; enables UTF    |
-| `FLAGS.ANCHORED`         | Match only at the start of the subject                         |
-| `FLAGS.ENDANCHORED`      | Match only at the end of the subject                           |
-| `FLAGS.UNGREEDY`         | Invert greediness of all quantifiers (`(?U)`)                  |
-| `FLAGS.NO_AUTO_CAPTURE`  | Plain `()` do not capture; use `(?:)` or named groups (`(?n)`) |
-| `FLAGS.DUPNAMES`         | Allow duplicate named groups                                   |
-| `FLAGS.DOLLAR_ENDONLY`   | `$` matches only at the absolute end of the string             |
-| `FLAGS.ALLOW_EMPTY_CLASS`| Allow `[]` as an empty character class that never matches      |
-| `FLAGS.ALT_BSUX`         | JavaScript-style `\u{HHHH}` escape sequences                  |
-| `FLAGS.LITERAL`          | Treat the entire pattern as a literal string                    |
-| `FLAGS.ALT_EXTENDED_CLASS`| Enable extended character class syntax `[[ ]]`               |
+| Constant                   | Description                                                    |
+| -------------------------- | -------------------------------------------------------------- |
+| `FLAGS.CASELESS`           | Case-insensitive matching (`(?i)`)                             |
+| `FLAGS.MULTILINE`          | `^`/`$` match at line boundaries (`(?m)`)                      |
+| `FLAGS.DOTALL`             | `.` matches any character including newline (`(?s)`)           |
+| `FLAGS.EXTENDED`           | Ignore unescaped whitespace in pattern (`(?x)`)                |
+| `FLAGS.UTF`                | Treat pattern and subject as UTF-8                             |
+| `FLAGS.UCP`                | Unicode properties for `\d`, `\w`, `\s`, `\b`; enables UTF     |
+| `FLAGS.ANCHORED`           | Match only at the start of the subject                         |
+| `FLAGS.ENDANCHORED`        | Match only at the end of the subject                           |
+| `FLAGS.UNGREEDY`           | Invert greediness of all quantifiers (`(?U)`)                  |
+| `FLAGS.NO_AUTO_CAPTURE`    | Plain `()` do not capture; use `(?:)` or named groups (`(?n)`) |
+| `FLAGS.DUPNAMES`           | Allow duplicate named groups                                   |
+| `FLAGS.DOLLAR_ENDONLY`     | `$` matches only at the absolute end of the string             |
+| `FLAGS.ALLOW_EMPTY_CLASS`  | Allow `[]` as an empty character class that never matches      |
+| `FLAGS.ALT_BSUX`           | JavaScript-style `\u{HHHH}` escape sequences                   |
+| `FLAGS.LITERAL`            | Treat the entire pattern as a literal string                   |
+| `FLAGS.ALT_EXTENDED_CLASS` | Enable extended character class syntax `[[ ]]`                 |
 
 ### `MATCH_FLAGS`
 
 Match-time flags. Pass as `options.matchFlags`.
 
-| Constant                    | Description                                                   |
-|-----------------------------|---------------------------------------------------------------|
-| `MATCH_FLAGS.NOTBOL`        | `^` does not match at the start of the subject                |
-| `MATCH_FLAGS.NOTEOL`        | `$` does not match at the end of the subject                  |
-| `MATCH_FLAGS.NOTEMPTY`      | An empty string is not a valid match                          |
-| `MATCH_FLAGS.NOTEMPTY_ATSTART` | An empty string at the start of the subject is not valid   |
-| `MATCH_FLAGS.PARTIAL_SOFT`  | Return a partial match if no full match; prefer full match    |
-| `MATCH_FLAGS.PARTIAL_HARD`  | Return a partial match if no full match; prefer partial match |
+| Constant                       | Description                                                   |
+| ------------------------------ | ------------------------------------------------------------- |
+| `MATCH_FLAGS.NOTBOL`           | `^` does not match at the start of the subject                |
+| `MATCH_FLAGS.NOTEOL`           | `$` does not match at the end of the subject                  |
+| `MATCH_FLAGS.NOTEMPTY`         | An empty string is not a valid match                          |
+| `MATCH_FLAGS.NOTEMPTY_ATSTART` | An empty string at the start of the subject is not valid      |
+| `MATCH_FLAGS.PARTIAL_SOFT`     | Return a partial match if no full match; prefer full match    |
+| `MATCH_FLAGS.PARTIAL_HARD`     | Return a partial match if no full match; prefer partial match |
 
 **Partial matching** — when `PARTIAL_SOFT` or `PARTIAL_HARD` is set and only part of the subject
 matches, the result has `partial: true`. Useful for validating input as the user types.
@@ -450,23 +451,23 @@ matches, the result has `partial: true`. Useful for validating input as the user
 
 Flags for `replace()` / `replaceAll()`. Pass as `options.replaceFlags`.
 
-| Constant                   | Description                                                       |
-|----------------------------|-------------------------------------------------------------------|
-| `REPLACE_FLAGS.UNSET_EMPTY`   | Unmatched optional groups produce `""` — already the default  |
-| `REPLACE_FLAGS.UNKNOWN_UNSET` | Unknown group name references in replacement produce `""`      |
-| `REPLACE_FLAGS.LITERAL`       | Replacement string is plain text; no `$`-substitution          |
+| Constant                      | Description                                                  |
+| ----------------------------- | ------------------------------------------------------------ |
+| `REPLACE_FLAGS.UNSET_EMPTY`   | Unmatched optional groups produce `""` — already the default |
+| `REPLACE_FLAGS.UNKNOWN_UNSET` | Unknown group name references in replacement produce `""`    |
+| `REPLACE_FLAGS.LITERAL`       | Replacement string is plain text; no `$`-substitution        |
 
 ### `EXTRA_FLAGS`
 
 Extra compile-time flags. Pass as the `extraFlags` argument to any method.
 
-| Constant                      | Description                                              |
-|-------------------------------|----------------------------------------------------------|
-| `EXTRA_FLAGS.MATCH_WORD`      | Pattern is implicitly wrapped in `\b…\b` (whole-word)    |
-| `EXTRA_FLAGS.MATCH_LINE`      | Pattern is implicitly anchored to `^…$` (whole-line)     |
-| `EXTRA_FLAGS.ALLOW_LOOKAROUND_BSK` | Allow `\K` inside lookaround assertions             |
-| `EXTRA_FLAGS.CASELESS_RESTRICT`    | ASCII-only case folding even when UCP is on          |
-| `EXTRA_FLAGS.ASCII_BSD`       | `\d` matches only ASCII digits `[0-9]`                   |
-| `EXTRA_FLAGS.ASCII_BSS`       | `\s` matches only ASCII whitespace                       |
-| `EXTRA_FLAGS.ASCII_BSW`       | `\w` matches only ASCII word characters `[A-Za-z0-9_]`  |
-| `EXTRA_FLAGS.TURKISH_CASING`  | Turkish/Azerbaijani I/İ casing rules under `(?i)`        |
+| Constant                           | Description                                            |
+| ---------------------------------- | ------------------------------------------------------ |
+| `EXTRA_FLAGS.MATCH_WORD`           | Pattern is implicitly wrapped in `\b…\b` (whole-word)  |
+| `EXTRA_FLAGS.MATCH_LINE`           | Pattern is implicitly anchored to `^…$` (whole-line)   |
+| `EXTRA_FLAGS.ALLOW_LOOKAROUND_BSK` | Allow `\K` inside lookaround assertions                |
+| `EXTRA_FLAGS.CASELESS_RESTRICT`    | ASCII-only case folding even when UCP is on            |
+| `EXTRA_FLAGS.ASCII_BSD`            | `\d` matches only ASCII digits `[0-9]`                 |
+| `EXTRA_FLAGS.ASCII_BSS`            | `\s` matches only ASCII whitespace                     |
+| `EXTRA_FLAGS.ASCII_BSW`            | `\w` matches only ASCII word characters `[A-Za-z0-9_]` |
+| `EXTRA_FLAGS.TURKISH_CASING`       | Turkish/Azerbaijani I/İ casing rules under `(?i)`      |

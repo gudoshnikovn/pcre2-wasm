@@ -61,9 +61,9 @@ describe('replaceAll()', () => {
 
 describe('REPLACE_FLAGS', () => {
   it('exports UNSET_EMPTY, UNKNOWN_UNSET, LITERAL', () => {
-    assert.equal(typeof REPLACE_FLAGS.UNSET_EMPTY,   'number');
+    assert.equal(typeof REPLACE_FLAGS.UNSET_EMPTY, 'number');
     assert.equal(typeof REPLACE_FLAGS.UNKNOWN_UNSET, 'number');
-    assert.equal(typeof REPLACE_FLAGS.LITERAL,       'number');
+    assert.equal(typeof REPLACE_FLAGS.LITERAL, 'number');
   });
 
   it('unset optional group substitutes as empty string by default (UNSET_EMPTY always on)', () => {
@@ -103,9 +103,7 @@ describe('REPLACE_FLAGS', () => {
   });
 
   it('replaceAll with Unicode subject and named group', () => {
-    const result = pcre2.replaceAll(
-      '(?P<word>[a-z]+)', 'hello world', '[${word}]', FLAGS.UTF,
-    );
+    const result = pcre2.replaceAll('(?P<word>[a-z]+)', 'hello world', '[${word}]', FLAGS.UTF);
     assert.equal(result, '[hello] [world]');
   });
 

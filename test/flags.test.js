@@ -15,7 +15,10 @@ describe('flags', () => {
 
   it('MULTILINE', () => {
     const r = pcre2.matchAll('^\\w+', 'foo\nbar\nbaz', FLAGS.MULTILINE);
-    assert.deepEqual(r.map(m => m.match), ['foo', 'bar', 'baz']);
+    assert.deepEqual(
+      r.map((m) => m.match),
+      ['foo', 'bar', 'baz'],
+    );
   });
 
   it('DOTALL', () => assert.ok(pcre2.match('a.b', 'a\nb', FLAGS.DOTALL)));
@@ -65,9 +68,9 @@ describe('flags', () => {
   });
 
   it('DOLLAR_ENDONLY — $ does not match before trailing newline', () => {
-    assert.equal(pcre2.test('end$', 'end\n'), true);                          // default: matches
-    assert.equal(pcre2.test('end$', 'end\n', FLAGS.DOLLAR_ENDONLY), false);   // strict: no match
-    assert.equal(pcre2.test('end$', 'end',   FLAGS.DOLLAR_ENDONLY), true);    // strict: matches at real end
+    assert.equal(pcre2.test('end$', 'end\n'), true); // default: matches
+    assert.equal(pcre2.test('end$', 'end\n', FLAGS.DOLLAR_ENDONLY), false); // strict: no match
+    assert.equal(pcre2.test('end$', 'end', FLAGS.DOLLAR_ENDONLY), true); // strict: matches at real end
   });
 
   it('DUPNAMES — allows duplicate named groups', () => {
@@ -82,14 +85,14 @@ describe('flags', () => {
   });
 
   it('ALT_BSUX — JavaScript-style \\u{HHHH} escape sequences', () => {
-    assert.equal(pcre2.test('\\u0041', 'A', FLAGS.ALT_BSUX), true);  // A = A
+    assert.equal(pcre2.test('\\u0041', 'A', FLAGS.ALT_BSUX), true); // A = A
     assert.equal(pcre2.test('\\u0041', 'B', FLAGS.ALT_BSUX), false);
   });
 
   it('LITERAL — pattern treated as a literal string', () => {
-    assert.equal(pcre2.test('a.b', 'axb'), true);                      // default: . is wildcard
-    assert.equal(pcre2.test('a.b', 'axb', FLAGS.LITERAL), false);      // literal: no match
-    assert.equal(pcre2.test('a.b', 'a.b', FLAGS.LITERAL), true);       // literal: exact match
+    assert.equal(pcre2.test('a.b', 'axb'), true); // default: . is wildcard
+    assert.equal(pcre2.test('a.b', 'axb', FLAGS.LITERAL), false); // literal: no match
+    assert.equal(pcre2.test('a.b', 'a.b', FLAGS.LITERAL), true); // literal: exact match
   });
 });
 
@@ -101,7 +104,10 @@ describe('inline flags in pattern', () => {
   });
   it('(?m) works without FLAGS constant', () => {
     const r = pcre2.matchAll('(?m)^\\w+', 'foo\nbar');
-    assert.deepEqual(r.map(m => m.match), ['foo', 'bar']);
+    assert.deepEqual(
+      r.map((m) => m.match),
+      ['foo', 'bar'],
+    );
   });
 });
 
@@ -109,12 +115,12 @@ describe('inline flags in pattern', () => {
 
 describe('MATCH_FLAGS', () => {
   it('exports correct constants', () => {
-    assert.equal(MATCH_FLAGS.NOTBOL,           0x00000001);
-    assert.equal(MATCH_FLAGS.NOTEOL,           0x00000002);
-    assert.equal(MATCH_FLAGS.NOTEMPTY,         0x00000004);
+    assert.equal(MATCH_FLAGS.NOTBOL, 0x00000001);
+    assert.equal(MATCH_FLAGS.NOTEOL, 0x00000002);
+    assert.equal(MATCH_FLAGS.NOTEMPTY, 0x00000004);
     assert.equal(MATCH_FLAGS.NOTEMPTY_ATSTART, 0x00000008);
-    assert.equal(MATCH_FLAGS.PARTIAL_SOFT,     0x00000010);
-    assert.equal(MATCH_FLAGS.PARTIAL_HARD,     0x00000020);
+    assert.equal(MATCH_FLAGS.PARTIAL_SOFT, 0x00000010);
+    assert.equal(MATCH_FLAGS.PARTIAL_HARD, 0x00000020);
   });
 
   it('NOTBOL: ^ does not match at start of subject', () => {
@@ -190,8 +196,14 @@ describe('MATCH_FLAGS', () => {
 describe('EXTRA_FLAGS', () => {
   it('exports all expected constants', () => {
     const keys = [
-      'ALLOW_LOOKAROUND_BSK', 'MATCH_WORD', 'MATCH_LINE',
-      'CASELESS_RESTRICT', 'ASCII_BSD', 'ASCII_BSS', 'ASCII_BSW', 'TURKISH_CASING',
+      'ALLOW_LOOKAROUND_BSK',
+      'MATCH_WORD',
+      'MATCH_LINE',
+      'CASELESS_RESTRICT',
+      'ASCII_BSD',
+      'ASCII_BSS',
+      'ASCII_BSW',
+      'TURKISH_CASING',
     ];
     for (const k of keys) assert.equal(typeof EXTRA_FLAGS[k], 'number', `EXTRA_FLAGS.${k}`);
   });
@@ -237,13 +249,34 @@ describe('EXTRA_FLAGS', () => {
   });
 
   it('CASELESS_RESTRICT + UCP: (?i) ASCII caseless still works', () => {
-    assert.equal(pcre2.test('hello', 'HELLO', FLAGS.UCP | FLAGS.CASELESS, {}, EXTRA_FLAGS.CASELESS_RESTRICT), true);
+    assert.equal(
+      pcre2.test('hello', 'HELLO', FLAGS.UCP | FLAGS.CASELESS, {}, EXTRA_FLAGS.CASELESS_RESTRICT),
+      true,
+    );
   });
 
   it('CASELESS_RESTRICT + UCP: \\w does not gain case-insensitive Unicode expansion', () => {
     // With CASELESS_RESTRICT, (?i)\w still matches only ASCII word chars
-    assert.equal(pcre2.test('(?i)\\w+', 'αβγ', FLAGS.UCP, {}, EXTRA_FLAGS.CASELESS_RESTRICT | EXTRA_FLAGS.ASCII_BSW), false);
-    assert.equal(pcre2.test('(?i)\\w+', 'HELLO', FLAGS.UCP, {}, EXTRA_FLAGS.CASELESS_RESTRICT | EXTRA_FLAGS.ASCII_BSW), true);
+    assert.equal(
+      pcre2.test(
+        '(?i)\\w+',
+        'αβγ',
+        FLAGS.UCP,
+        {},
+        EXTRA_FLAGS.CASELESS_RESTRICT | EXTRA_FLAGS.ASCII_BSW,
+      ),
+      false,
+    );
+    assert.equal(
+      pcre2.test(
+        '(?i)\\w+',
+        'HELLO',
+        FLAGS.UCP,
+        {},
+        EXTRA_FLAGS.CASELESS_RESTRICT | EXTRA_FLAGS.ASCII_BSW,
+      ),
+      true,
+    );
   });
 
   it('compiled regex with extraFlags respects MATCH_WORD', () => {
@@ -265,7 +298,13 @@ describe('EXTRA_FLAGS', () => {
   });
 
   it('MATCH_WORD with matchAll finds all standalone words', () => {
-    const r = pcre2.matchAll('cat', 'the cat and a catfish and cats', 0, {}, EXTRA_FLAGS.MATCH_WORD);
+    const r = pcre2.matchAll(
+      'cat',
+      'the cat and a catfish and cats',
+      0,
+      {},
+      EXTRA_FLAGS.MATCH_WORD,
+    );
     assert.equal(r.length, 1);
     assert.equal(r[0].match, 'cat');
   });

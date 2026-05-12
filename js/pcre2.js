@@ -4,7 +4,16 @@ import { FLAGS, MATCH_FLAGS, REPLACE_FLAGS, EXTRA_FLAGS, parseFlags } from './co
 import { PCRE2Regex } from './regex.js';
 import { PCRE2CompileError, PCRE2MatchError } from './errors.js';
 
-export { FLAGS, MATCH_FLAGS, REPLACE_FLAGS, EXTRA_FLAGS, PCRE2Regex, parseFlags, PCRE2CompileError, PCRE2MatchError };
+export {
+  FLAGS,
+  MATCH_FLAGS,
+  REPLACE_FLAGS,
+  EXTRA_FLAGS,
+  PCRE2Regex,
+  parseFlags,
+  PCRE2CompileError,
+  PCRE2MatchError,
+};
 
 /* ── Public factory ─────────────────────────────────────────────────────── */
 
@@ -26,19 +35,20 @@ export class PCRE2 {
 
     const m = this.#mod;
     const patternPtr = strToWasm(m, pattern);
-    const errBuf     = m._malloc(256);
-    const errOffBuf  = m._malloc(4);
+    const errBuf = m._malloc(256);
+    const errOffBuf = m._malloc(4);
 
     const ptr = m.ccall(
-      'pcre2_wasm_compile', 'number',
+      'pcre2_wasm_compile',
+      'number',
       ['number', 'number', 'number', 'number', 'number'],
-      [patternPtr, flags, errBuf, errOffBuf, extraFlags]
+      [patternPtr, flags, errBuf, errOffBuf, extraFlags],
     );
 
     m._free(patternPtr);
 
     if (ptr === 0) {
-      const msg        = m.UTF8ToString(errBuf);
+      const msg = m.UTF8ToString(errBuf);
       const byteOffset = m.getValue(errOffBuf, 'i32');
       m._free(errBuf);
       m._free(errOffBuf);
@@ -55,19 +65,23 @@ export class PCRE2 {
 
   #oneShot(pattern, flags, extraFlags, fn) {
     const re = this.compile(pattern, flags, extraFlags);
-    try { return fn(re); } finally { re.destroy(); }
+    try {
+      return fn(re);
+    } finally {
+      re.destroy();
+    }
   }
 
   test(pattern, subject, flags = 0, opts = {}, extraFlags = 0) {
-    return this.#oneShot(pattern, flags, extraFlags, re => re.test(subject, opts));
+    return this.#oneShot(pattern, flags, extraFlags, (re) => re.test(subject, opts));
   }
 
   match(pattern, subject, flags = 0, opts = {}, extraFlags = 0) {
-    return this.#oneShot(pattern, flags, extraFlags, re => re.match(subject, opts));
+    return this.#oneShot(pattern, flags, extraFlags, (re) => re.match(subject, opts));
   }
 
   matchAll(pattern, subject, flags = 0, opts = {}, extraFlags = 0) {
-    return this.#oneShot(pattern, flags, extraFlags, re => re.matchAll(subject, opts));
+    return this.#oneShot(pattern, flags, extraFlags, (re) => re.matchAll(subject, opts));
   }
 
   *matchAllIterator(pattern, subject, flags = 0, opts = {}, extraFlags = 0) {
@@ -80,29 +94,31 @@ export class PCRE2 {
   }
 
   count(pattern, subject, flags = 0, opts = {}, extraFlags = 0) {
-    return this.#oneShot(pattern, flags, extraFlags, re => re.count(subject, opts));
+    return this.#oneShot(pattern, flags, extraFlags, (re) => re.count(subject, opts));
   }
 
   search(pattern, subject, flags = 0, opts = {}, extraFlags = 0) {
-    return this.#oneShot(pattern, flags, extraFlags, re => re.search(subject, opts));
+    return this.#oneShot(pattern, flags, extraFlags, (re) => re.search(subject, opts));
   }
 
   replace(pattern, subject, replacement, flags = 0, opts = {}, extraFlags = 0) {
-    return this.#oneShot(pattern, flags, extraFlags,
-      re => re.replace(subject, replacement, opts));
+    return this.#oneShot(pattern, flags, extraFlags, (re) =>
+      re.replace(subject, replacement, opts),
+    );
   }
 
   replaceAll(pattern, subject, replacement, flags = 0, opts = {}, extraFlags = 0) {
-    return this.#oneShot(pattern, flags, extraFlags,
-      re => re.replaceAll(subject, replacement, opts));
+    return this.#oneShot(pattern, flags, extraFlags, (re) =>
+      re.replaceAll(subject, replacement, opts),
+    );
   }
 
   split(pattern, subject, limit, flags = 0, opts = {}, extraFlags = 0) {
-    return this.#oneShot(pattern, flags, extraFlags, re => re.split(subject, limit, opts));
+    return this.#oneShot(pattern, flags, extraFlags, (re) => re.split(subject, limit, opts));
   }
 
   patternInfo(pattern, flags = 0, extraFlags = 0) {
-    return this.#oneShot(pattern, flags, extraFlags, re => re.patternInfo());
+    return this.#oneShot(pattern, flags, extraFlags, (re) => re.patternInfo());
   }
 }
 

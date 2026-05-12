@@ -1,6 +1,12 @@
 import { describe, it, before } from 'node:test';
 import assert from 'node:assert/strict';
-import { createPCRE2, FLAGS, EXTRA_FLAGS, REPLACE_FLAGS, PCRE2CompileError, PCRE2MatchError } from '../lib/index.js';
+import {
+  createPCRE2,
+  FLAGS,
+  EXTRA_FLAGS,
+  PCRE2CompileError,
+  PCRE2MatchError,
+} from '../lib/index.js';
 
 let pcre2;
 
@@ -15,7 +21,10 @@ describe('compile()', () => {
     const re = pcre2.compile('\\d+');
     assert.equal(re.test('abc 123'), true);
     const r = re.matchAll('1 2 3');
-    assert.deepEqual(r.map(m => m.match), ['1', '2', '3']);
+    assert.deepEqual(
+      r.map((m) => m.match),
+      ['1', '2', '3'],
+    );
     re.destroy();
   });
 
@@ -26,10 +35,7 @@ describe('compile()', () => {
   it('error offset is in characters, not bytes', () => {
     // 'арт[' — 'арт' is 3 chars (6 UTF-8 bytes); PCRE2 reports the error after '[' (char 4, byte 7).
     // Without conversion the raw byte offset would appear as 7; with conversion it is 4.
-    assert.throws(
-      () => pcre2.compile('арт[', FLAGS.UTF),
-      /offset 4/
-    );
+    assert.throws(() => pcre2.compile('арт[', FLAGS.UTF), /offset 4/);
   });
 
   it('compiled regex supports replace()', () => {
@@ -57,14 +63,14 @@ describe('ReDoS protection', () => {
   it('matchLimit stops catastrophic backtracking', () => {
     assert.throws(
       () => pcre2.test(REDOS_PATTERN, REDOS_SUBJECT, 0, { matchLimit: 1000 }),
-      /match limit exceeded/i
+      /match limit exceeded/i,
     );
   });
 
   it('depthLimit stops deep recursion', () => {
     assert.throws(
       () => pcre2.test(REDOS_PATTERN, REDOS_SUBJECT, 0, { depthLimit: 10 }),
-      /depth limit exceeded/i
+      /depth limit exceeded/i,
     );
   });
 
@@ -74,17 +80,14 @@ describe('ReDoS protection', () => {
 
   it('compiled regex also respects limits', () => {
     const re = pcre2.compile(REDOS_PATTERN);
-    assert.throws(
-      () => re.test(REDOS_SUBJECT, { matchLimit: 1000 }),
-      /match limit exceeded/i
-    );
+    assert.throws(() => re.test(REDOS_SUBJECT, { matchLimit: 1000 }), /match limit exceeded/i);
     re.destroy();
   });
 
   it('matchAll stops on limit mid-loop', () => {
     assert.throws(
       () => pcre2.matchAll(REDOS_PATTERN, REDOS_SUBJECT, 0, { matchLimit: 1000 }),
-      /match limit exceeded/i
+      /match limit exceeded/i,
     );
   });
 });
@@ -150,7 +153,7 @@ describe('patternInfo()', () => {
     const pattern = '(?P<x>\\d+)';
     const re = pcre2.compile(pattern);
     const fromInstance = re.patternInfo();
-    const fromOneShot  = pcre2.patternInfo(pattern);
+    const fromOneShot = pcre2.patternInfo(pattern);
     re.destroy();
     assert.deepEqual(fromInstance, fromOneShot);
   });
@@ -163,11 +166,11 @@ describe('patternInfo()', () => {
 
   it('complex pattern: all fields are numbers or boolean or null', () => {
     const info = pcre2.patternInfo('(?P<a>\\d+)(?<=\\d{2})(\\w)\\1');
-    assert.equal(typeof info.captureCount,      'number');
-    assert.equal(typeof info.namedGroupCount,    'number');
-    assert.equal(typeof info.hasBackreferences,  'boolean');
+    assert.equal(typeof info.captureCount, 'number');
+    assert.equal(typeof info.namedGroupCount, 'number');
+    assert.equal(typeof info.hasBackreferences, 'boolean');
     assert.ok(info.minLength === null || typeof info.minLength === 'number');
-    assert.equal(typeof info.maxLookbehind,      'number');
+    assert.equal(typeof info.maxLookbehind, 'number');
   });
 
   it('pattern with nested groups counts all capture groups', () => {
@@ -246,10 +249,7 @@ describe('PCRE2MatchError', () => {
   const SUBJECT = 'a'.repeat(20) + 'c';
 
   it('matchLimit exceeded throws PCRE2MatchError, not a plain Error', () => {
-    assert.throws(
-      () => pcre2.test(REDOS, SUBJECT, 0, { matchLimit: 1000 }),
-      PCRE2MatchError
-    );
+    assert.throws(() => pcre2.test(REDOS, SUBJECT, 0, { matchLimit: 1000 }), PCRE2MatchError);
   });
 
   it('PCRE2MatchError is instanceof Error', () => {

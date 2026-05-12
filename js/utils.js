@@ -35,9 +35,7 @@ export function charOffsetToByteOffset(str, charOffset) {
 export function throwIfMatchError(m, rc) {
   if (rc >= -1 || rc === -2 || rc === WASM_BUF_OVERFLOW) return;
   const errBuf = m._malloc(256);
-  m.ccall('pcre2_wasm_error_message', 'number',
-    ['number', 'number', 'number'],
-    [rc, errBuf, 256]);
+  m.ccall('pcre2_wasm_error_message', 'number', ['number', 'number', 'number'], [rc, errBuf, 256]);
   const msg = m.UTF8ToString(errBuf);
   m._free(errBuf);
   throw new PCRE2MatchError(`PCRE2 match error: ${msg}`, rc);
@@ -54,7 +52,11 @@ export function withBuffer(m, initialSize, fn) {
   for (let attempt = 0; attempt < 8; attempt++) {
     const buf = m._malloc(size);
     const rc = fn(buf, size);
-    if (rc === WASM_BUF_OVERFLOW) { m._free(buf); size *= 4; continue; }
+    if (rc === WASM_BUF_OVERFLOW) {
+      m._free(buf);
+      size *= 4;
+      continue;
+    }
     const text = m.UTF8ToString(buf);
     m._free(buf);
     return { rc, text };

@@ -1,5 +1,4 @@
 import {
-  WASM_BUF_OVERFLOW,
   strToWasm,
   byteOffsetToCharOffset,
   charOffsetToByteOffset,
@@ -29,13 +28,12 @@ export class PCRE2Regex {
   #mod;
   #ptr;
   #pattern;
-  #registryToken;
 
   constructor(mod, ptr, pattern) {
     this.#mod = mod;
     this.#ptr = ptr;
     this.#pattern = pattern;
-    this.#registryToken = _registry.register(this, { mod, ptr }, this);
+    _registry.register(this, { mod, ptr }, this);
   }
 
   get pattern() {
@@ -46,11 +44,12 @@ export class PCRE2Regex {
   test(subject, { matchLimit = 0, depthLimit = 0, startPos = 0, matchFlags = 0 } = {}) {
     const m = this.#mod;
     const subjectPtr = strToWasm(m, subject);
-    const startByte  = charOffsetToByteOffset(subject, startPos);
+    const startByte = charOffsetToByteOffset(subject, startPos);
     const rc = m.ccall(
-      'pcre2_wasm_match_all', 'number',
+      'pcre2_wasm_match_all',
+      'number',
       ['number', 'number', 'number', 'number', 'number', 'number', 'number', 'number'],
-      [this.#ptr, subjectPtr, 0, 0, matchLimit, depthLimit, startByte, matchFlags]
+      [this.#ptr, subjectPtr, 0, 0, matchLimit, depthLimit, startByte, matchFlags],
     );
     m._free(subjectPtr);
     throwIfMatchError(m, rc);
@@ -64,17 +63,18 @@ export class PCRE2Regex {
   match(subject, { matchLimit = 0, depthLimit = 0, startPos = 0, matchFlags = 0 } = {}) {
     const m = this.#mod;
     const subjectPtr = strToWasm(m, subject);
-    const startByte  = charOffsetToByteOffset(subject, startPos);
+    const startByte = charOffsetToByteOffset(subject, startPos);
     try {
       const { rc, text } = withBuffer(m, 16 * 1024, (buf, size) =>
         m.ccall(
-          'pcre2_wasm_match', 'number',
+          'pcre2_wasm_match',
+          'number',
           ['number', 'number', 'number', 'number', 'number', 'number', 'number', 'number'],
-          [this.#ptr, subjectPtr, buf, size, matchLimit, depthLimit, startByte, matchFlags]
-        )
+          [this.#ptr, subjectPtr, buf, size, matchLimit, depthLimit, startByte, matchFlags],
+        ),
       );
       throwIfMatchError(m, rc);
-      const result = (rc > 0 || rc === -2) ? JSON.parse(text) : null;
+      const result = rc > 0 || rc === -2 ? JSON.parse(text) : null;
       if (result) result.index = byteOffsetToCharOffset(subject, result.index);
       return result;
     } finally {
@@ -98,14 +98,15 @@ export class PCRE2Regex {
   matchAll(subject, { matchLimit = 0, depthLimit = 0, startPos = 0, matchFlags = 0 } = {}) {
     const m = this.#mod;
     const subjectPtr = strToWasm(m, subject);
-    const startByte  = charOffsetToByteOffset(subject, startPos);
+    const startByte = charOffsetToByteOffset(subject, startPos);
     try {
       const { rc, text } = withBuffer(m, 64 * 1024, (buf, size) =>
         m.ccall(
-          'pcre2_wasm_match_all', 'number',
+          'pcre2_wasm_match_all',
+          'number',
           ['number', 'number', 'number', 'number', 'number', 'number', 'number', 'number'],
-          [this.#ptr, subjectPtr, buf, size, matchLimit, depthLimit, startByte, matchFlags]
-        )
+          [this.#ptr, subjectPtr, buf, size, matchLimit, depthLimit, startByte, matchFlags],
+        ),
       );
       throwIfMatchError(m, rc);
       const result = rc > 0 ? JSON.parse(text) : [];
@@ -120,11 +121,12 @@ export class PCRE2Regex {
   count(subject, { matchLimit = 0, depthLimit = 0, startPos = 0, matchFlags = 0 } = {}) {
     const m = this.#mod;
     const subjectPtr = strToWasm(m, subject);
-    const startByte  = charOffsetToByteOffset(subject, startPos);
+    const startByte = charOffsetToByteOffset(subject, startPos);
     const rc = m.ccall(
-      'pcre2_wasm_match_all', 'number',
+      'pcre2_wasm_match_all',
+      'number',
       ['number', 'number', 'number', 'number', 'number', 'number', 'number', 'number'],
-      [this.#ptr, subjectPtr, 0, 0, matchLimit, depthLimit, startByte, matchFlags]
+      [this.#ptr, subjectPtr, 0, 0, matchLimit, depthLimit, startByte, matchFlags],
     );
     m._free(subjectPtr);
     throwIfMatchError(m, rc);
@@ -177,25 +179,51 @@ export class PCRE2Regex {
     return this.#replace(subject, replacement, true, opts);
   }
 
-  #replace(subject, replacement, global,
-           { matchLimit = 0, depthLimit = 0, startPos = 0,
-             matchFlags = 0, replaceFlags = 0 } = {}) {
+  #replace(
+    subject,
+    replacement,
+    global,
+    { matchLimit = 0, depthLimit = 0, startPos = 0, matchFlags = 0, replaceFlags = 0 } = {},
+  ) {
     const m = this.#mod;
     /* PCRE2 uses $0 for the whole match; JS uses $&. Normalise before passing to C. */
     const repl = replacement.replace(/\$&/g, '$0');
     const subjectPtr = strToWasm(m, subject);
-    const replPtr    = strToWasm(m, repl);
-    const startByte  = charOffsetToByteOffset(subject, startPos);
+    const replPtr = strToWasm(m, repl);
+    const startByte = charOffsetToByteOffset(subject, startPos);
     const initialSize = Math.max(m.lengthBytesUTF8(subject) * 2 + 1024, 16 * 1024);
     try {
       const { rc, text } = withBuffer(m, initialSize, (buf, size) =>
         m.ccall(
-          'pcre2_wasm_replace', 'number',
-          ['number', 'number', 'number', 'number', 'number', 'number',
-           'number', 'number', 'number', 'number', 'number'],
-          [this.#ptr, subjectPtr, replPtr, global ? 1 : 0, buf, size,
-           matchLimit, depthLimit, startByte, matchFlags, replaceFlags]
-        )
+          'pcre2_wasm_replace',
+          'number',
+          [
+            'number',
+            'number',
+            'number',
+            'number',
+            'number',
+            'number',
+            'number',
+            'number',
+            'number',
+            'number',
+            'number',
+          ],
+          [
+            this.#ptr,
+            subjectPtr,
+            replPtr,
+            global ? 1 : 0,
+            buf,
+            size,
+            matchLimit,
+            depthLimit,
+            startByte,
+            matchFlags,
+            replaceFlags,
+          ],
+        ),
       );
       throwIfMatchError(m, rc);
       return text;
@@ -214,9 +242,10 @@ export class PCRE2Regex {
     const bufSize = 256;
     const buf = m._malloc(bufSize);
     const rc = m.ccall(
-      'pcre2_wasm_pattern_info', 'number',
+      'pcre2_wasm_pattern_info',
+      'number',
       ['number', 'number', 'number'],
-      [this.#ptr, buf, bufSize]
+      [this.#ptr, buf, bufSize],
     );
     if (rc < 0) {
       m._free(buf);
@@ -233,7 +262,6 @@ export class PCRE2Regex {
       this.#mod.ccall('pcre2_wasm_free', null, ['number'], [this.#ptr]);
       this.#ptr = 0;
       _registry.unregister(this);
-      this.#registryToken = undefined;
     }
   }
 }

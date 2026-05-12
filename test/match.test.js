@@ -11,7 +11,7 @@ before(async () => {
 /* ── test() ─────────────────────────────────────────────────────────────── */
 
 describe('test()', () => {
-  it('returns true on match',    () => assert.equal(pcre2.test('\\d+', 'abc 123'), true));
+  it('returns true on match', () => assert.equal(pcre2.test('\\d+', 'abc 123'), true));
   it('returns false on no match', () => assert.equal(pcre2.test('\\d+', 'no digits'), false));
   it('returns false on empty subject', () => assert.equal(pcre2.test('\\d+', ''), false));
 });
@@ -45,7 +45,10 @@ describe('match()', () => {
   it('matchAll indices are character offsets for multi-byte subjects', () => {
     const results = pcre2.matchAll('[аеиоу]', 'привет', FLAGS.UTF);
     // и = char 2, е = char 4
-    assert.deepEqual(results.map(r => r.index), [2, 4]);
+    assert.deepEqual(
+      results.map((r) => r.index),
+      [2, 4],
+    );
   });
 
   it('groups is empty array when pattern has no capture groups', () => {
@@ -97,10 +100,7 @@ describe('match() named capture groups', () => {
   });
 
   it('multiple named groups in correct order', () => {
-    const r = pcre2.match(
-      '(?P<host>[\\w.]+):(?P<port>\\d+)',
-      'localhost:8080'
-    );
+    const r = pcre2.match('(?P<host>[\\w.]+):(?P<port>\\d+)', 'localhost:8080');
     assert.equal(r.namedGroups.host, 'localhost');
     assert.equal(r.namedGroups.port, '8080');
   });
@@ -179,7 +179,7 @@ describe('large inputs', () => {
   });
 
   it('matchAll with many matches', () => {
-    const subject = ('a ').repeat(1_000);
+    const subject = 'a '.repeat(1_000);
     const r = pcre2.matchAll('a', subject);
     assert.equal(r.length, 1_000);
   });
@@ -214,17 +214,26 @@ describe('matchAll() zero-length match + UTF-8', () => {
 
   it('lookahead on Greek string yields correct character-offset indices', () => {
     const r = pcre2.matchAll('(?=.)', 'αβ', FLAGS.UTF);
-    assert.deepEqual(r.map(x => x.index), [0, 1]);
+    assert.deepEqual(
+      r.map((x) => x.index),
+      [0, 1],
+    );
   });
 
   it('lookahead on Chinese string yields correct character-offset indices', () => {
     const r = pcre2.matchAll('(?=.)', '中文', FLAGS.UTF);
-    assert.deepEqual(r.map(x => x.index), [0, 1]);
+    assert.deepEqual(
+      r.map((x) => x.index),
+      [0, 1],
+    );
   });
 
   it('lookahead on Japanese string yields correct character-offset indices', () => {
     const r = pcre2.matchAll('(?=.)', 'こんにちは', FLAGS.UTF);
-    assert.deepEqual(r.map(x => x.index), [0, 1, 2, 3, 4]);
+    assert.deepEqual(
+      r.map((x) => x.index),
+      [0, 1, 2, 3, 4],
+    );
   });
 
   it('zero-length match at end of multi-byte string terminates cleanly', () => {
@@ -244,8 +253,8 @@ describe('matchAll() zero-length match + UTF-8', () => {
 
 describe('matchAllIterator()', () => {
   it('yields the same matches as matchAll()', () => {
-    const expected = pcre2.matchAll('\\d+', 'a1 b22 c333').map(m => m.match);
-    const actual   = [...pcre2.matchAllIterator('\\d+', 'a1 b22 c333')].map(m => m.match);
+    const expected = pcre2.matchAll('\\d+', 'a1 b22 c333').map((m) => m.match);
+    const actual = [...pcre2.matchAllIterator('\\d+', 'a1 b22 c333')].map((m) => m.match);
     assert.deepEqual(actual, expected);
   });
 
@@ -268,9 +277,9 @@ describe('matchAllIterator()', () => {
 
   it('early break stops before exhausting the subject', () => {
     let count = 0;
-    for (const _ of pcre2.matchAllIterator('\\d+', '1 2 3 4 5')) {
+    for (const m of pcre2.matchAllIterator('\\d+', '1 2 3 4 5')) {
       count++;
-      if (count === 2) break;
+      if (m && count === 2) break;
     }
     assert.equal(count, 2);
   });
@@ -283,22 +292,25 @@ describe('matchAllIterator()', () => {
 
   it('PCRE2Regex instance method works the same', () => {
     const re = pcre2.compile('\\d+');
-    const result = [...re.matchAllIterator('a1 b22 c333')].map(m => m.match);
+    const result = [...re.matchAllIterator('a1 b22 c333')].map((m) => m.match);
     assert.deepEqual(result, ['1', '22', '333']);
     re.destroy();
   });
 
   it('respects startPos option', () => {
-    const result = [...pcre2.matchAllIterator('\\d+', 'a1 b22 c333', 0, { startPos: 4 })].map(m => m.match);
+    const result = [...pcre2.matchAllIterator('\\d+', 'a1 b22 c333', 0, { startPos: 4 })].map(
+      (m) => m.match,
+    );
     assert.deepEqual(result, ['22', '333']);
   });
 
   it('respects matchLimit — throws PCRE2MatchError on complex pattern', () => {
     assert.throws(
-      () => {
-        for (const _ of pcre2.matchAllIterator('^(a+)+$', 'a'.repeat(20) + 'c', 0, { matchLimit: 1000 })) {}
-      },
-      PCRE2MatchError
+      () =>
+        Array.from(
+          pcre2.matchAllIterator('^(a+)+$', 'a'.repeat(20) + 'c', 0, { matchLimit: 1000 }),
+        ),
+      PCRE2MatchError,
     );
   });
 });
@@ -330,7 +342,7 @@ describe('count()', () => {
   it('respects matchLimit — throws PCRE2MatchError', () => {
     assert.throws(
       () => pcre2.count('^(a+)+$', 'a'.repeat(20) + 'c', 0, { matchLimit: 1000 }),
-      PCRE2MatchError
+      PCRE2MatchError,
     );
   });
 

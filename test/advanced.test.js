@@ -1,6 +1,6 @@
 import { describe, it, before } from 'node:test';
 import assert from 'node:assert/strict';
-import { createPCRE2, FLAGS, MATCH_FLAGS } from '../lib/index.js';
+import { createPCRE2, FLAGS } from '../lib/index.js';
 
 let pcre2;
 
@@ -116,9 +116,9 @@ describe('split()', () => {
   });
 
   it('split with Unicode delimiter', () => {
-    assert.deepEqual(
-      pcre2.split('\\p{Z}+', 'hello world', undefined, FLAGS.UCP),
-      ['hello', 'world'],
-    );
+    assert.deepEqual(pcre2.split('\\p{Z}+', 'hello world', undefined, FLAGS.UCP), [
+      'hello',
+      'world',
+    ]);
   });
 });
