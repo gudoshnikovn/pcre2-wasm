@@ -1,6 +1,6 @@
 {
   "name": "pcre2-wasm",
-  "version": "10.47.3",
+  "version": "10.47.4",
   "description": "PCRE2 compiled to WebAssembly — full PCRE2 regex in browser and Node.js",
   "type": "module",
   "exports": {
@@ -23,7 +23,11 @@
   ],
   "scripts": {
     "build": "make build",
-    "test": "node --test 'test/*.test.js'"
+    "test": "node --test 'test/*.test.js'",
+    "lint": "eslint js/ test/",
+    "format": "prettier --write js/ test/ lib/index.d.ts lib/react.d.ts README.md docs/api.md",
+    "format:check": "prettier --check js/ test/ lib/index.d.ts lib/react.d.ts README.md docs/api.md",
+    "typecheck": "tsc --noEmit"
   },
   "keywords": [
     "pcre2",
@@ -48,5 +52,13 @@
   },
   "engines": {
     "node": ">=18.0.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.3.0",
+    "eslint-config-prettier": "^10.1.8",
+    "globals": "^17.6.0",
+    "prettier": "^3.8.3",
+    "typescript": "^6.0.3"
   }
 }
