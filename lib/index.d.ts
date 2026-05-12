@@ -43,6 +43,31 @@ export interface MatchOptions {
    * These are passed directly to pcre2_match / pcre2_substitute at match time.
    */
   matchFlags?: number;
+  /**
+   * Bitwise OR of REPLACE_FLAGS constants. Controls pcre2_substitute behaviour.
+   * Only effective when calling replace() or replaceAll().
+   * Note: REPLACE_FLAGS.UNSET_EMPTY is always active by default.
+   */
+  replaceFlags?: number;
+}
+
+/**
+ * Metadata about a compiled pattern, returned by patternInfo().
+ */
+export interface PCRE2PatternInfo {
+  /** Number of capture groups (both named and unnamed). */
+  captureCount:      number;
+  /** Number of named capture groups. */
+  namedGroupCount:   number;
+  /** True if the pattern contains back-references (\1, \k<name>, etc.). */
+  hasBackreferences: boolean;
+  /**
+   * Minimum subject length that could produce a match, or null if PCRE2
+   * could not determine a lower bound.
+   */
+  minLength:         number | null;
+  /** Maximum lookbehind length in the pattern (0 when there are none). */
+  maxLookbehind:     number;
 }
 
 /**
@@ -73,7 +98,7 @@ export declare const MATCH_FLAGS: {
 };
 
 /**
- * PCRE2 flag constants. Combine with bitwise OR: FLAGS.CASELESS | FLAGS.MULTILINE
+ * PCRE2 compile-time flag constants. Combine with bitwise OR: FLAGS.CASELESS | FLAGS.MULTILINE
  */
 export declare const FLAGS: {
   readonly CASELESS:          0x00000008;
@@ -101,6 +126,42 @@ export declare const FLAGS: {
   readonly LITERAL:           0x02000000;
   /** Enable extended character class syntax [[ ]]. */
   readonly ALT_EXTENDED_CLASS:0x08000000;
+};
+
+/**
+ * Substitution flag constants. Passed via MatchOptions.replaceFlags.
+ * Note: UNSET_EMPTY is always active by default (unmatched groups produce "").
+ */
+export declare const REPLACE_FLAGS: {
+  /** Unmatched optional groups produce "" — already the default. */
+  readonly UNSET_EMPTY:   0x00000400;
+  /** Unknown group name references in replacement produce "" instead of an error. */
+  readonly UNKNOWN_UNSET: 0x00000800;
+  /** Replacement string is treated as plain text; no $-substitution. */
+  readonly LITERAL:       0x00008000;
+};
+
+/**
+ * Extra compile-time flag constants. Passed as extraFlags to compile().
+ * These map to PCRE2_EXTRA_* options set via pcre2_compile_context.
+ */
+export declare const EXTRA_FLAGS: {
+  /** Allow \K inside lookaround assertions. */
+  readonly ALLOW_LOOKAROUND_BSK: 0x00000040;
+  /** Pattern is implicitly surrounded by \b...\b (whole-word matching). */
+  readonly MATCH_WORD:           0x00000004;
+  /** Pattern is implicitly anchored to ^...$ (whole-line matching). */
+  readonly MATCH_LINE:           0x00000008;
+  /** Restrict (?i) case folding to ASCII characters even when UCP is on. */
+  readonly CASELESS_RESTRICT:    0x00000080;
+  /** \d matches only ASCII digits [0-9], even when UCP is on. */
+  readonly ASCII_BSD:            0x00000100;
+  /** \s matches only ASCII whitespace, even when UCP is on. */
+  readonly ASCII_BSS:            0x00000200;
+  /** \w matches only ASCII word characters [A-Za-z0-9_], even when UCP is on. */
+  readonly ASCII_BSW:            0x00000400;
+  /** Apply Turkish/Azerbaijani I/İ casing rules under (?i). */
+  readonly TURKISH_CASING:       0x00010000;
 };
 
 /**
@@ -143,21 +204,25 @@ export declare class PCRE2Regex {
    */
   split(subject: string, limit?: number, options?: MatchOptions): (string | undefined)[];
 
+  /** Returns metadata about the compiled pattern. */
+  patternInfo(): PCRE2PatternInfo;
+
   /** Free WASM memory. No-op if already destroyed. */
   destroy(): void;
 }
 
 export declare class PCRE2 {
   /** Compile a pattern into a reusable PCRE2Regex. Caller must call destroy() when done. */
-  compile(pattern: string, flags?: number): PCRE2Regex;
+  compile(pattern: string, flags?: number, extraFlags?: number): PCRE2Regex;
 
-  test(pattern: string, subject: string, flags?: number, options?: MatchOptions): boolean;
-  match(pattern: string, subject: string, flags?: number, options?: MatchOptions): PCRE2Match | null;
-  matchAll(pattern: string, subject: string, flags?: number, options?: MatchOptions): PCRE2Match[];
-  search(pattern: string, subject: string, flags?: number, options?: MatchOptions): number;
-  replace(pattern: string, subject: string, replacement: string, flags?: number, options?: MatchOptions): string;
-  replaceAll(pattern: string, subject: string, replacement: string, flags?: number, options?: MatchOptions): string;
-  split(pattern: string, subject: string, limit?: number, flags?: number, options?: MatchOptions): (string | undefined)[];
+  test(pattern: string, subject: string, flags?: number, options?: MatchOptions, extraFlags?: number): boolean;
+  match(pattern: string, subject: string, flags?: number, options?: MatchOptions, extraFlags?: number): PCRE2Match | null;
+  matchAll(pattern: string, subject: string, flags?: number, options?: MatchOptions, extraFlags?: number): PCRE2Match[];
+  search(pattern: string, subject: string, flags?: number, options?: MatchOptions, extraFlags?: number): number;
+  replace(pattern: string, subject: string, replacement: string, flags?: number, options?: MatchOptions, extraFlags?: number): string;
+  replaceAll(pattern: string, subject: string, replacement: string, flags?: number, options?: MatchOptions, extraFlags?: number): string;
+  split(pattern: string, subject: string, limit?: number, flags?: number, options?: MatchOptions, extraFlags?: number): (string | undefined)[];
+  patternInfo(pattern: string, flags?: number, extraFlags?: number): PCRE2PatternInfo;
 }
 
 /**

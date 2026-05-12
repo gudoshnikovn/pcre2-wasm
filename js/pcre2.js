@@ -1,234 +1,9 @@
-/* ── Heap string helper ─────────────────────────────────────────────────── */
+import PCRE2Module from '../dist/pcre2.js';
+import { strToWasm, byteOffsetToCharOffset } from './utils.js';
+import { FLAGS, MATCH_FLAGS, REPLACE_FLAGS, EXTRA_FLAGS } from './constants.js';
+import { PCRE2Regex } from './regex.js';
 
-/* Encode a JS string as UTF-8 in WASM heap. Caller must _free the returned ptr. */
-function strToWasm(m, s) {
-  const len = m.lengthBytesUTF8(s) + 1;
-  const ptr = m._malloc(len);
-  m.stringToUTF8(s, ptr, len);
-  return ptr;
-}
-
-/*
- * Convert a UTF-8 byte offset to a JS string character offset.
- * PCRE2 reports error positions in bytes; callers expect character positions.
- */
-function byteOffsetToCharOffset(str, byteOffset) {
-  if (byteOffset <= 0) return 0;
-  const bytes = new TextEncoder().encode(str);
-  return new TextDecoder().decode(bytes.subarray(0, byteOffset)).length;
-}
-
-/* Convert a JS character offset to a UTF-8 byte offset (needed for startPos). */
-function charOffsetToByteOffset(str, charOffset) {
-  if (charOffset <= 0) return 0;
-  return new TextEncoder().encode(str.slice(0, charOffset)).length;
-}
-
-/* Sentinel returned by C wrapper when the output buffer was too small (retry). */
-const WASM_BUF_OVERFLOW = -999;
-
-/*
- * Throw a descriptive error for PCRE2 match errors (limit exceeded, etc.).
- * rc = -1 (no match), rc = -2 (PCRE2_ERROR_PARTIAL), WASM_BUF_OVERFLOW are handled by callers.
- */
-function throwIfMatchError(m, rc) {
-  if (rc >= -1 || rc === -2 || rc === WASM_BUF_OVERFLOW) return;
-  const errBuf = m._malloc(256);
-  m.ccall('pcre2_wasm_error_message', 'number',
-    ['number', 'number', 'number'],
-    [rc, errBuf, 256]);
-  const msg = m.UTF8ToString(errBuf);
-  m._free(errBuf);
-  throw new Error(`PCRE2 match error: ${msg}`);
-}
-
-/* ── Internal: compiled regex handle ────────────────────────────────────── */
-
-class PCRE2Regex {
-  #mod;
-  #ptr;
-  #pattern;
-
-  constructor(mod, ptr, pattern) {
-    this.#mod = mod;
-    this.#ptr = ptr;
-    this.#pattern = pattern;
-  }
-
-  get pattern() {
-    return this.#pattern;
-  }
-
-  /* Returns true if the pattern matches anywhere in subject. */
-  test(subject, { matchLimit = 0, depthLimit = 0, startPos = 0, matchFlags = 0 } = {}) {
-    const m = this.#mod;
-    const subjectPtr = strToWasm(m, subject);
-    const startByte = charOffsetToByteOffset(subject, startPos);
-    const rc = m.ccall(
-      'pcre2_wasm_match_all', 'number',
-      ['number', 'number', 'number', 'number', 'number', 'number', 'number', 'number'],
-      [this.#ptr, subjectPtr, 0, 0, matchLimit, depthLimit, startByte, matchFlags]
-    );
-    m._free(subjectPtr);
-    throwIfMatchError(m, rc);
-    return rc > 0;
-  }
-
-  /*
-   * Returns the first match as an object, or null.
-   * {
-   *   match:       string,          // full match
-   *   index:       number,          // character offset in subject
-   *   groups:      (string|null)[], // numbered capture groups (1-based)
-   *   namedGroups: Record<string, string|null> | undefined
-   * }
-   */
-  match(subject, { matchLimit = 0, depthLimit = 0, startPos = 0, matchFlags = 0 } = {}) {
-    const m = this.#mod;
-    const subjectPtr = strToWasm(m, subject);
-    const startByte = charOffsetToByteOffset(subject, startPos);
-    let bufSize = 16 * 1024;
-    try {
-      for (let attempt = 0; attempt < 8; attempt++) {
-        const buf = m._malloc(bufSize);
-        const rc = m.ccall(
-          'pcre2_wasm_match', 'number',
-          ['number', 'number', 'number', 'number', 'number', 'number', 'number', 'number'],
-          [this.#ptr, subjectPtr, buf, bufSize, matchLimit, depthLimit, startByte, matchFlags]
-        );
-        if (rc === WASM_BUF_OVERFLOW) { m._free(buf); bufSize *= 4; continue; }
-        throwIfMatchError(m, rc);
-        const result = (rc > 0 || rc === -2) ? JSON.parse(m.UTF8ToString(buf)) : null;
-        m._free(buf);
-        if (result) result.index = byteOffsetToCharOffset(subject, result.index);
-        return result;
-      }
-      throw new Error('PCRE2 match: result too large');
-    } finally {
-      m._free(subjectPtr);
-    }
-  }
-
-  /*
-   * Returns all non-overlapping matches as an array of match objects.
-   * Each element has the same shape as the result of match().
-   */
-  matchAll(subject, { matchLimit = 0, depthLimit = 0, startPos = 0, matchFlags = 0 } = {}) {
-    const m = this.#mod;
-    const subjectPtr = strToWasm(m, subject);
-    const startByte = charOffsetToByteOffset(subject, startPos);
-    let bufSize = 64 * 1024;
-    try {
-      for (let attempt = 0; attempt < 8; attempt++) {
-        const buf = m._malloc(bufSize);
-        const rc = m.ccall(
-          'pcre2_wasm_match_all', 'number',
-          ['number', 'number', 'number', 'number', 'number', 'number', 'number', 'number'],
-          [this.#ptr, subjectPtr, buf, bufSize, matchLimit, depthLimit, startByte, matchFlags]
-        );
-        if (rc === WASM_BUF_OVERFLOW) { m._free(buf); bufSize *= 4; continue; }
-        throwIfMatchError(m, rc);
-        const result = rc > 0 ? JSON.parse(m.UTF8ToString(buf)) : [];
-        m._free(buf);
-        for (const r of result) r.index = byteOffsetToCharOffset(subject, r.index);
-        return result;
-      }
-      throw new Error('PCRE2 matchAll: result too large');
-    } finally {
-      m._free(subjectPtr);
-    }
-  }
-
-  /*
-   * Returns the character offset of the first match, or -1 if no match.
-   */
-  search(subject, opts = {}) {
-    const r = this.match(subject, opts);
-    return r !== null ? r.index : -1;
-  }
-
-  /*
-   * Splits subject by the pattern. Returns an array of strings and, when the
-   * pattern contains capture groups, the captured text is included between the
-   * surrounding parts (same semantics as JS String.prototype.split with RegExp
-   * or Python re.split).
-   *
-   * limit (optional) — maximum number of splits; remaining subject is returned
-   * as the last element (matches JS / Python behaviour).
-   */
-  split(subject, limit, opts = {}) {
-    if (limit === 0) return [];
-    const matches = this.matchAll(subject, opts);
-    const parts = [];
-    let pos = 0;
-    for (const m of matches) {
-      if (limit !== undefined && parts.length >= limit) break;
-      parts.push(subject.slice(pos, m.index));
-      for (const g of m.groups) parts.push(g ?? undefined);
-      pos = m.index + m.match.length;
-      if (m.match.length === 0) {
-        // Avoid infinite loop on zero-length match — advance one char
-        if (pos < subject.length) pos++;
-        else break;
-      }
-    }
-    if (limit === undefined || parts.length <= limit) parts.push(subject.slice(pos));
-    return parts;
-  }
-
-  /*
-   * Replaces the first match. Returns the resulting string.
-   * Replacement syntax: $0 or $& = whole match, $1..$n = numbered group,
-   * ${name} = named group, $$ = literal dollar.
-   */
-  replace(subject, replacement, opts = {}) {
-    return this.#replace(subject, replacement, false, opts);
-  }
-
-  /*
-   * Replaces all non-overlapping matches. Returns the resulting string.
-   * Same replacement syntax as replace().
-   */
-  replaceAll(subject, replacement, opts = {}) {
-    return this.#replace(subject, replacement, true, opts);
-  }
-
-  #replace(subject, replacement, global, { matchLimit = 0, depthLimit = 0, startPos = 0, matchFlags = 0 } = {}) {
-    const m = this.#mod;
-    // Convert JS $& (whole match) to PCRE2 extended syntax $0
-    const repl = replacement.replace(/\$&/g, '$0');
-    const subjectPtr = strToWasm(m, subject);
-    const replPtr    = strToWasm(m, repl);
-    const startByte  = charOffsetToByteOffset(subject, startPos);
-    let bufSize = Math.max(m.lengthBytesUTF8(subject) * 2 + 1024, 16 * 1024);
-    try {
-      for (let attempt = 0; attempt < 10; attempt++) {
-        const buf = m._malloc(bufSize);
-        const rc = m.ccall(
-          'pcre2_wasm_replace', 'number',
-          ['number', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number'],
-          [this.#ptr, subjectPtr, replPtr, global ? 1 : 0, buf, bufSize, matchLimit, depthLimit, startByte, matchFlags]
-        );
-        if (rc === WASM_BUF_OVERFLOW) { m._free(buf); bufSize *= 4; continue; }
-        throwIfMatchError(m, rc);
-        const result = m.UTF8ToString(buf);
-        m._free(buf);
-        return result;
-      }
-      throw new Error('PCRE2 replace: output too large');
-    } finally {
-      m._free(subjectPtr);
-      m._free(replPtr);
-    }
-  }
-
-  destroy() {
-    if (this.#ptr) {
-      this.#mod.ccall('pcre2_wasm_free', null, ['number'], [this.#ptr]);
-      this.#ptr = 0;
-    }
-  }
-}
+export { FLAGS, MATCH_FLAGS, REPLACE_FLAGS, EXTRA_FLAGS, PCRE2Regex };
 
 /* ── Public factory ─────────────────────────────────────────────────────── */
 
@@ -239,10 +14,14 @@ export class PCRE2 {
     this.#mod = mod;
   }
 
-  /* Compile a pattern into a reusable PCRE2Regex. Caller must call destroy(). */
-  compile(pattern, flags = 0) {
-    // UCP requires UTF; enable it automatically so callers need not add UTF explicitly.
-    if (flags & 0x00020000 /* UCP */) flags |= 0x00080000 /* UTF */;
+  /*
+   * Compile a pattern into a reusable PCRE2Regex. Caller must call destroy().
+   * flags: bitwise OR of FLAGS constants.
+   * extraFlags: bitwise OR of EXTRA_FLAGS constants (pass 0 or omit for none).
+   */
+  compile(pattern, flags = 0, extraFlags = 0) {
+    /* UCP requires UTF; enable it automatically so callers need not add UTF explicitly. */
+    if (flags & FLAGS.UCP) flags |= FLAGS.UTF;
 
     const m = this.#mod;
     const patternPtr = strToWasm(m, pattern);
@@ -251,8 +30,8 @@ export class PCRE2 {
 
     const ptr = m.ccall(
       'pcre2_wasm_compile', 'number',
-      ['number', 'number', 'number', 'number'],
-      [patternPtr, flags, errBuf, errOffBuf]
+      ['number', 'number', 'number', 'number', 'number'],
+      [patternPtr, flags, errBuf, errOffBuf, extraFlags]
     );
 
     m._free(patternPtr);
@@ -271,83 +50,52 @@ export class PCRE2 {
     return new PCRE2Regex(m, ptr, pattern);
   }
 
-  /* One-shot helpers — compile, operate, destroy. */
+  /* ── One-shot helpers — compile, operate, destroy ───────────────────── */
 
-  test(pattern, subject, flags = 0, opts = {}) {
-    const re = this.compile(pattern, flags);
-    const r  = re.test(subject, opts);
-    re.destroy();
-    return r;
+  #oneShot(pattern, flags, extraFlags, fn) {
+    const re = this.compile(pattern, flags, extraFlags);
+    try { return fn(re); } finally { re.destroy(); }
   }
 
-  match(pattern, subject, flags = 0, opts = {}) {
-    const re = this.compile(pattern, flags);
-    const r  = re.match(subject, opts);
-    re.destroy();
-    return r;
+  test(pattern, subject, flags = 0, opts = {}, extraFlags = 0) {
+    return this.#oneShot(pattern, flags, extraFlags, re => re.test(subject, opts));
   }
 
-  matchAll(pattern, subject, flags = 0, opts = {}) {
-    const re = this.compile(pattern, flags);
-    const r  = re.matchAll(subject, opts);
-    re.destroy();
-    return r;
+  match(pattern, subject, flags = 0, opts = {}, extraFlags = 0) {
+    return this.#oneShot(pattern, flags, extraFlags, re => re.match(subject, opts));
   }
 
-  replace(pattern, subject, replacement, flags = 0, opts = {}) {
-    const re = this.compile(pattern, flags);
-    const r  = re.replace(subject, replacement, opts);
-    re.destroy();
-    return r;
+  matchAll(pattern, subject, flags = 0, opts = {}, extraFlags = 0) {
+    return this.#oneShot(pattern, flags, extraFlags, re => re.matchAll(subject, opts));
   }
 
-  replaceAll(pattern, subject, replacement, flags = 0, opts = {}) {
-    const re = this.compile(pattern, flags);
-    const r  = re.replaceAll(subject, replacement, opts);
-    re.destroy();
-    return r;
+  search(pattern, subject, flags = 0, opts = {}, extraFlags = 0) {
+    return this.#oneShot(pattern, flags, extraFlags, re => re.search(subject, opts));
   }
 
-  search(pattern, subject, flags = 0, opts = {}) {
-    const re = this.compile(pattern, flags);
-    const r  = re.search(subject, opts);
-    re.destroy();
-    return r;
+  replace(pattern, subject, replacement, flags = 0, opts = {}, extraFlags = 0) {
+    return this.#oneShot(pattern, flags, extraFlags,
+      re => re.replace(subject, replacement, opts));
   }
 
-  split(pattern, subject, limit, flags = 0, opts = {}) {
-    const re = this.compile(pattern, flags);
-    const r  = re.split(subject, limit, opts);
-    re.destroy();
-    return r;
+  replaceAll(pattern, subject, replacement, flags = 0, opts = {}, extraFlags = 0) {
+    return this.#oneShot(pattern, flags, extraFlags,
+      re => re.replaceAll(subject, replacement, opts));
+  }
+
+  split(pattern, subject, limit, flags = 0, opts = {}, extraFlags = 0) {
+    return this.#oneShot(pattern, flags, extraFlags, re => re.split(subject, limit, opts));
+  }
+
+  patternInfo(pattern, flags = 0, extraFlags = 0) {
+    return this.#oneShot(pattern, flags, extraFlags, re => re.patternInfo());
   }
 }
 
-export const MATCH_FLAGS = {
-  NOTBOL:           0x00000001,  // Subject is not at a line beginning; ^ won't match at start
-  NOTEOL:           0x00000002,  // Subject is not at a line end; $ won't match at end
-  NOTEMPTY:         0x00000004,  // Empty string is not a valid match
-  NOTEMPTY_ATSTART: 0x00000008,  // Empty string at start of subject is not a valid match
-  PARTIAL_SOFT:     0x00000010,  // Return partial match if no full match; prefer full match
-  PARTIAL_HARD:     0x00000020,  // Return partial match if no full match; prefer partial match
-};
-
-export const FLAGS = {
-  CASELESS:          0x00000008,  // (?i) Case-insensitive matching
-  MULTILINE:         0x00000400,  // (?m) ^ and $ match line boundaries
-  DOTALL:            0x00000020,  // (?s) . matches any character including newline
-  EXTENDED:          0x00000080,  // (?x) Ignore unescaped whitespace in pattern
-  EXTENDED_MORE:     0x01000000,  // (?xx) Extended mode: also ignore whitespace in character classes
-  UTF:               0x00080000,  // Treat pattern and subject as UTF-8
-  UCP:               0x00020000,  // Use Unicode properties for \d, \w, \s, \b and (?i); UTF is enabled automatically
-  ANCHORED:          0x80000000,  // Match only at the start of the subject
-  ENDANCHORED:       0x20000000,  // Match only at the end of the subject
-  UNGREEDY:          0x00040000,  // (?U) Invert greediness of quantifiers
-  NO_AUTO_CAPTURE:   0x00002000,  // (?n) Plain () do not capture; use (?:) or named groups
-  DUPNAMES:          0x00000040,  // Allow duplicate named groups: (?<name>...)...(?<name>...)
-  DOLLAR_ENDONLY:    0x00000010,  // $ matches only at end of string, not before a trailing newline
-  ALLOW_EMPTY_CLASS: 0x00000001,  // Allow [] as an empty character class (never matches)
-  ALT_BSUX:          0x00000002,  // JavaScript-style \u{HHHH} and \x{HH} escape sequences
-  LITERAL:           0x02000000,  // Treat the entire pattern as a literal string
-  ALT_EXTENDED_CLASS:0x08000000,  // Enable extended character class syntax [[ ]]
-};
+/*
+ * Initialize the PCRE2 WASM module. The binary is embedded — no external files needed.
+ */
+export async function createPCRE2() {
+  const mod = await PCRE2Module();
+  return new PCRE2(mod);
+}
