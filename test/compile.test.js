@@ -1,6 +1,6 @@
 import { describe, it, before } from 'node:test';
 import assert from 'node:assert/strict';
-import { createPCRE2, FLAGS, EXTRA_FLAGS, REPLACE_FLAGS } from '../lib/index.js';
+import { createPCRE2, FLAGS, EXTRA_FLAGS, REPLACE_FLAGS, PCRE2CompileError, PCRE2MatchError } from '../lib/index.js';
 
 let pcre2;
 
@@ -193,5 +193,89 @@ describe('FinalizationRegistry (destroy safety)', () => {
     const re = pcre2.compile('\\w+');
     re.destroy();
     assert.doesNotThrow(() => re.destroy());
+  });
+});
+
+/* ── PCRE2CompileError ───────────────────────────────────────────────────── */
+
+describe('PCRE2CompileError', () => {
+  it('compile() throws PCRE2CompileError, not a plain Error', () => {
+    assert.throws(() => pcre2.compile('[unclosed'), PCRE2CompileError);
+  });
+
+  it('PCRE2CompileError is instanceof Error', () => {
+    try {
+      pcre2.compile('[unclosed');
+    } catch (e) {
+      assert.ok(e instanceof Error);
+      assert.ok(e instanceof PCRE2CompileError);
+    }
+  });
+
+  it('e.name is PCRE2CompileError', () => {
+    try {
+      pcre2.compile('[unclosed');
+    } catch (e) {
+      assert.equal(e.name, 'PCRE2CompileError');
+    }
+  });
+
+  it('e.offset is the character position of the error in the pattern', () => {
+    // 'арт[' — 3 Cyrillic chars + '['; error is at char offset 4
+    try {
+      pcre2.compile('арт[', FLAGS.UTF);
+    } catch (e) {
+      assert.ok(e instanceof PCRE2CompileError);
+      assert.equal(e.offset, 4);
+    }
+  });
+
+  it('e.message includes the offset', () => {
+    try {
+      pcre2.compile('[unclosed');
+    } catch (e) {
+      assert.match(e.message, /offset \d+/);
+    }
+  });
+});
+
+/* ── PCRE2MatchError ────────────────────────────────────────────────────── */
+
+describe('PCRE2MatchError', () => {
+  const REDOS = '^(a+)+$';
+  const SUBJECT = 'a'.repeat(20) + 'c';
+
+  it('matchLimit exceeded throws PCRE2MatchError, not a plain Error', () => {
+    assert.throws(
+      () => pcre2.test(REDOS, SUBJECT, 0, { matchLimit: 1000 }),
+      PCRE2MatchError
+    );
+  });
+
+  it('PCRE2MatchError is instanceof Error', () => {
+    try {
+      pcre2.test(REDOS, SUBJECT, 0, { matchLimit: 1000 });
+    } catch (e) {
+      assert.ok(e instanceof Error);
+      assert.ok(e instanceof PCRE2MatchError);
+    }
+  });
+
+  it('e.name is PCRE2MatchError', () => {
+    try {
+      pcre2.test(REDOS, SUBJECT, 0, { matchLimit: 1000 });
+    } catch (e) {
+      assert.equal(e.name, 'PCRE2MatchError');
+    }
+  });
+
+  it('e.code is a negative integer (raw PCRE2 error code)', () => {
+    try {
+      pcre2.test(REDOS, SUBJECT, 0, { matchLimit: 1000 });
+    } catch (e) {
+      assert.ok(e instanceof PCRE2MatchError);
+      assert.equal(typeof e.code, 'number');
+      assert.ok(e.code < 0);
+    }
   });
 });

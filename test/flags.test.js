@@ -1,6 +1,6 @@
 import { describe, it, before } from 'node:test';
 import assert from 'node:assert/strict';
-import { createPCRE2, FLAGS, MATCH_FLAGS, EXTRA_FLAGS } from '../lib/index.js';
+import { createPCRE2, FLAGS, MATCH_FLAGS, EXTRA_FLAGS, parseFlags } from '../lib/index.js';
 
 let pcre2;
 
@@ -268,5 +268,49 @@ describe('EXTRA_FLAGS', () => {
     const r = pcre2.matchAll('cat', 'the cat and a catfish and cats', 0, {}, EXTRA_FLAGS.MATCH_WORD);
     assert.equal(r.length, 1);
     assert.equal(r[0].match, 'cat');
+  });
+});
+
+/* ── parseFlags() ───────────────────────────────────────────────────────── */
+
+describe('parseFlags()', () => {
+  it('single flag: i → CASELESS', () => {
+    assert.equal(parseFlags('i'), FLAGS.CASELESS);
+  });
+
+  it('multiple flags: im → CASELESS | MULTILINE', () => {
+    assert.equal(parseFlags('im'), FLAGS.CASELESS | FLAGS.MULTILINE);
+  });
+
+  it('g is silently ignored — returns 0', () => {
+    assert.equal(parseFlags('g'), 0);
+  });
+
+  it('g mixed with real flags is a no-op', () => {
+    assert.equal(parseFlags('gi'), FLAGS.CASELESS);
+  });
+
+  it('all documented letters are accepted without throwing', () => {
+    assert.doesNotThrow(() => parseFlags('imsuUxADg'));
+  });
+
+  it('empty string returns 0', () => {
+    assert.equal(parseFlags(''), 0);
+  });
+
+  it('unknown flag letter throws TypeError', () => {
+    assert.throws(() => parseFlags('z'), TypeError);
+    assert.throws(() => parseFlags('z'), /unknown flag 'z'/);
+  });
+
+  it('result works as flags argument to compile()', () => {
+    const re = pcre2.compile('hello', parseFlags('i'));
+    assert.equal(re.test('HELLO'), true);
+    re.destroy();
+  });
+
+  it('result works as flags argument to one-shot methods', () => {
+    assert.equal(pcre2.test('hello', 'HELLO world', parseFlags('i')), true);
+    assert.equal(pcre2.match('hello', 'HELLO', parseFlags('i')).match, 'HELLO');
   });
 });

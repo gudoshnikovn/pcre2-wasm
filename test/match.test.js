@@ -1,6 +1,6 @@
 import { describe, it, before } from 'node:test';
 import assert from 'node:assert/strict';
-import { createPCRE2, FLAGS } from '../lib/index.js';
+import { createPCRE2, FLAGS, PCRE2MatchError } from '../lib/index.js';
 
 let pcre2;
 
@@ -237,5 +237,113 @@ describe('matchAll() zero-length match + UTF-8', () => {
     const r = pcre2.matchAll('[aα]?', 'aα', FLAGS.UTF);
     assert.ok(Array.isArray(r));
     for (const m of r) assert.ok(m.index >= 0);
+  });
+});
+
+/* ── matchAllIterator() ─────────────────────────────────────────────────── */
+
+describe('matchAllIterator()', () => {
+  it('yields the same matches as matchAll()', () => {
+    const expected = pcre2.matchAll('\\d+', 'a1 b22 c333').map(m => m.match);
+    const actual   = [...pcre2.matchAllIterator('\\d+', 'a1 b22 c333')].map(m => m.match);
+    assert.deepEqual(actual, expected);
+  });
+
+  it('returns an iterator, not an array', () => {
+    const iter = pcre2.matchAllIterator('\\d+', '1 2 3');
+    assert.equal(typeof iter[Symbol.iterator], 'function');
+    assert.equal(Array.isArray(iter), false);
+  });
+
+  it('empty result when no match', () => {
+    assert.deepEqual([...pcre2.matchAllIterator('\\d+', 'abc')], []);
+  });
+
+  it('each yielded match has the expected shape', () => {
+    const [m] = pcre2.matchAllIterator('(\\d+)', 'abc 42 def');
+    assert.equal(m.match, '42');
+    assert.equal(m.index, 4);
+    assert.deepEqual(m.groups, ['42']);
+  });
+
+  it('early break stops before exhausting the subject', () => {
+    let count = 0;
+    for (const _ of pcre2.matchAllIterator('\\d+', '1 2 3 4 5')) {
+      count++;
+      if (count === 2) break;
+    }
+    assert.equal(count, 2);
+  });
+
+  it('does not loop forever on zero-length matches', () => {
+    const result = [...pcre2.matchAllIterator('a*', 'bbb')];
+    assert.ok(result.length > 0);
+    assert.ok(result.length < 20);
+  });
+
+  it('PCRE2Regex instance method works the same', () => {
+    const re = pcre2.compile('\\d+');
+    const result = [...re.matchAllIterator('a1 b22 c333')].map(m => m.match);
+    assert.deepEqual(result, ['1', '22', '333']);
+    re.destroy();
+  });
+
+  it('respects startPos option', () => {
+    const result = [...pcre2.matchAllIterator('\\d+', 'a1 b22 c333', 0, { startPos: 4 })].map(m => m.match);
+    assert.deepEqual(result, ['22', '333']);
+  });
+
+  it('respects matchLimit — throws PCRE2MatchError on complex pattern', () => {
+    assert.throws(
+      () => {
+        for (const _ of pcre2.matchAllIterator('^(a+)+$', 'a'.repeat(20) + 'c', 0, { matchLimit: 1000 })) {}
+      },
+      PCRE2MatchError
+    );
+  });
+});
+
+/* ── count() ────────────────────────────────────────────────────────────── */
+
+describe('count()', () => {
+  it('returns the correct number of matches', () => {
+    assert.equal(pcre2.count('\\d+', 'a1 b22 c333'), 3);
+  });
+
+  it('returns 0 when no match', () => {
+    assert.equal(pcre2.count('\\d+', 'abc'), 0);
+  });
+
+  it('returns 0 on empty subject', () => {
+    assert.equal(pcre2.count('\\d+', ''), 0);
+  });
+
+  it('result equals matchAll().length', () => {
+    const subject = 'one 1 two 2 three 3 four 4';
+    assert.equal(pcre2.count('\\d+', subject), pcre2.matchAll('\\d+', subject).length);
+  });
+
+  it('respects startPos option', () => {
+    assert.equal(pcre2.count('\\d+', 'a1 b22 c333', 0, { startPos: 4 }), 2);
+  });
+
+  it('respects matchLimit — throws PCRE2MatchError', () => {
+    assert.throws(
+      () => pcre2.count('^(a+)+$', 'a'.repeat(20) + 'c', 0, { matchLimit: 1000 }),
+      PCRE2MatchError
+    );
+  });
+
+  it('PCRE2Regex instance method works the same', () => {
+    const re = pcre2.compile('\\d+');
+    assert.equal(re.count('a1 b22 c333'), 3);
+    assert.equal(re.count('abc'), 0);
+    re.destroy();
+  });
+
+  it('compiled regex respects startPos', () => {
+    const re = pcre2.compile('\\d+');
+    assert.equal(re.count('a1 b22 c333', { startPos: 4 }), 2);
+    re.destroy();
   });
 });
