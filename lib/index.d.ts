@@ -234,6 +234,29 @@ export declare class PCRE2 {
 }
 
 /**
+ * Thrown when pcre2_compile fails. `offset` is the character position
+ * in the pattern where the error was detected.
+ */
+export declare class PCRE2CompileError extends Error {
+  readonly offset: number;
+}
+
+/**
+ * Thrown when a match operation hits a PCRE2 error (e.g. matchLimit exceeded).
+ * `code` is the raw negative PCRE2 error code.
+ */
+export declare class PCRE2MatchError extends Error {
+  readonly code: number;
+}
+
+/**
+ * Convert a flag string like `'gim'` to the equivalent numeric bitmask.
+ * Accepted letters: i m s x u U A D g (g is silently ignored — the API is stateless).
+ * Throws TypeError for unknown flag letters.
+ */
+export declare function parseFlags(flags: string): number;
+
+/**
  * Initialize the PCRE2 WASM module. The binary is embedded — no external files needed.
  * @example
  * const pcre2 = await createPCRE2();

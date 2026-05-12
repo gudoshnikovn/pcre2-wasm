@@ -1,9 +1,10 @@
 import PCRE2Module from '../dist/pcre2.js';
 import { strToWasm, byteOffsetToCharOffset } from './utils.js';
-import { FLAGS, MATCH_FLAGS, REPLACE_FLAGS, EXTRA_FLAGS } from './constants.js';
+import { FLAGS, MATCH_FLAGS, REPLACE_FLAGS, EXTRA_FLAGS, parseFlags } from './constants.js';
 import { PCRE2Regex } from './regex.js';
+import { PCRE2CompileError, PCRE2MatchError } from './errors.js';
 
-export { FLAGS, MATCH_FLAGS, REPLACE_FLAGS, EXTRA_FLAGS, PCRE2Regex };
+export { FLAGS, MATCH_FLAGS, REPLACE_FLAGS, EXTRA_FLAGS, PCRE2Regex, parseFlags, PCRE2CompileError, PCRE2MatchError };
 
 /* ── Public factory ─────────────────────────────────────────────────────── */
 
@@ -42,7 +43,7 @@ export class PCRE2 {
       m._free(errBuf);
       m._free(errOffBuf);
       const offset = byteOffsetToCharOffset(pattern, byteOffset);
-      throw new Error(`PCRE2 compile error at offset ${offset}: ${msg}`);
+      throw new PCRE2CompileError(`PCRE2 compile error at offset ${offset}: ${msg}`, offset);
     }
 
     m._free(errBuf);
