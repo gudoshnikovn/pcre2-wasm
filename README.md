@@ -200,4 +200,4 @@ make
 | `make build` | Compile WASM (assumes setup already done) |
 | `make clean` | Remove build artifacts                    |
 
-See [docs/GUIDE_EN.md](docs/GUIDE_EN.md) for the full build walkthrough.
+See [docs/INTERNALS.md](docs/INTERNALS.md) for the full build walkthrough and architecture overview.
