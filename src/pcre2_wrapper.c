@@ -150,16 +150,27 @@ static pcre2_match_context* make_mctx(uint32_t match_limit, uint32_t depth_limit
 /*
  * Compile a pattern. Returns compiled code pointer or NULL on error.
  * error_buf must be >= 256 bytes; error_offset receives the error position.
+ * extra_flags: PCRE2_EXTRA_* bits (pass 0 for none).
  */
 EMSCRIPTEN_KEEPALIVE
 pcre2_code* pcre2_wasm_compile(const char* pattern, uint32_t flags,
-                                char* error_buf, uint32_t* error_offset) {
+                                char* error_buf, uint32_t* error_offset,
+                                uint32_t extra_flags) {
     int errcode = 0;
     PCRE2_SIZE erroffset = 0;
+
+    pcre2_compile_context* cctx = NULL;
+    if (extra_flags != 0) {
+        cctx = pcre2_compile_context_create(NULL);
+        if (cctx) pcre2_set_compile_extra_options(cctx, extra_flags);
+    }
+
     pcre2_code* re = pcre2_compile(
         (PCRE2_SPTR)pattern, PCRE2_ZERO_TERMINATED,
-        flags, &errcode, &erroffset, NULL
+        flags, &errcode, &erroffset, cctx
     );
+    if (cctx) pcre2_compile_context_free(cctx);
+
     if (!re && error_buf) {
         pcre2_get_error_message(errcode, (PCRE2_UCHAR*)error_buf, 256);
         if (error_offset) *error_offset = (uint32_t)erroffset;
@@ -348,14 +359,21 @@ int pcre2_wasm_replace(pcre2_code* re, const char* subject,
                         const char* replacement, int global,
                         char* out_buf, uint32_t out_buf_size,
                         uint32_t match_limit, uint32_t depth_limit,
-                        uint32_t start_offset, uint32_t match_flags) {
+                        uint32_t start_offset, uint32_t match_flags,
+                        uint32_t replace_flags) {
     if (!re || !subject || !replacement || !out_buf) return -1;
 
     pcre2_match_context* mctx = make_mctx(match_limit, depth_limit);
 
     PCRE2_SIZE out_len = (PCRE2_SIZE)out_buf_size;
-    uint32_t opts = PCRE2_SUBSTITUTE_EXTENDED | PCRE2_SUBSTITUTE_OVERFLOW_LENGTH
-                    | (uint32_t)match_flags;
+    /* PCRE2_SUBSTITUTE_UNSET_EMPTY is always on: unmatched groups → "" (JS-compatible).
+       PCRE2_SUBSTITUTE_EXTENDED and PCRE2_SUBSTITUTE_LITERAL are mutually exclusive;
+       omit EXTENDED when the caller requests LITERAL. */
+    uint32_t opts = PCRE2_SUBSTITUTE_OVERFLOW_LENGTH
+                    | PCRE2_SUBSTITUTE_UNSET_EMPTY
+                    | (uint32_t)match_flags
+                    | replace_flags;
+    if (!(replace_flags & PCRE2_SUBSTITUTE_LITERAL)) opts |= PCRE2_SUBSTITUTE_EXTENDED;
     if (global) opts |= PCRE2_SUBSTITUTE_GLOBAL;
 
     int rc = pcre2_substitute(
@@ -374,4 +392,51 @@ int pcre2_wasm_replace(pcre2_code* re, const char* subject,
 EMSCRIPTEN_KEEPALIVE
 void pcre2_wasm_free(pcre2_code* re) {
     if (re) pcre2_code_free(re);
+}
+
+/*
+ * Write compiled pattern metadata as a JSON object to out_buf.
+ * Returns: bytes written (> 0), WASM_BUF_OVERFLOW, or -1 on bad args.
+ *
+ * JSON: {"captureCount":N,"namedGroupCount":N,"hasBackreferences":bool,
+ *        "minLength":N|null,"maxLookbehind":N}
+ */
+EMSCRIPTEN_KEEPALIVE
+int pcre2_wasm_pattern_info(pcre2_code* re, char* out_buf, uint32_t buf_size) {
+    if (!re || !out_buf || buf_size < 4) return -1;
+
+    uint32_t capture_count  = 0;
+    uint32_t name_count     = 0;
+    uint32_t backref_max    = 0;   /* highest back-reference number; 0 = none */
+    uint32_t min_length     = 0;
+    uint32_t max_lookbehind = 0;
+
+    pcre2_pattern_info(re, PCRE2_INFO_CAPTURECOUNT,  &capture_count);
+    pcre2_pattern_info(re, PCRE2_INFO_NAMECOUNT,     &name_count);
+    pcre2_pattern_info(re, PCRE2_INFO_BACKREFMAX,    &backref_max);
+    pcre2_pattern_info(re, PCRE2_INFO_MINLENGTH,     &min_length);
+    pcre2_pattern_info(re, PCRE2_INFO_MAXLOOKBEHIND, &max_lookbehind);
+
+    JsonBuf b = { out_buf, 0, buf_size, 0 };
+
+    jb_lit(&b, "{\"captureCount\":");
+    jb_uint(&b, capture_count);
+    jb_lit(&b, ",\"namedGroupCount\":");
+    jb_uint(&b, name_count);
+    jb_lit(&b, ",\"hasBackreferences\":");
+    jb_lit(&b, backref_max > 0 ? "true" : "false");
+    jb_lit(&b, ",\"minLength\":");
+    /* PCRE2_UNSET (~0u) means PCRE2 could not determine a lower bound. */
+    if (min_length == (uint32_t)~0u) {
+        jb_lit(&b, "null");
+    } else {
+        jb_uint(&b, min_length);
+    }
+    jb_lit(&b, ",\"maxLookbehind\":");
+    jb_uint(&b, max_lookbehind);
+    jb_char(&b, '}');
+
+    if (b.overflow) return WASM_BUF_OVERFLOW;
+    out_buf[b.pos] = '\0';
+    return (int)b.pos;
 }
