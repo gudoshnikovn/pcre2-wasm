@@ -1,3 +1,5 @@
+import { PCRE2MatchError } from './errors.js';
+
 /* Sentinel returned by C when the output buffer is too small (retry needed). */
 export const WASM_BUF_OVERFLOW = -999;
 
@@ -38,7 +40,7 @@ export function throwIfMatchError(m, rc) {
     [rc, errBuf, 256]);
   const msg = m.UTF8ToString(errBuf);
   m._free(errBuf);
-  throw new Error(`PCRE2 match error: ${msg}`);
+  throw new PCRE2MatchError(`PCRE2 match error: ${msg}`, rc);
 }
 
 /*
