@@ -1,6 +1,6 @@
 {
   "name": "pcre2-wasm",
-  "version": "10.47.4",
+  "version": "10.47.5",
   "description": "PCRE2 compiled to WebAssembly — full PCRE2 regex in browser and Node.js",
   "type": "module",
   "exports": {
