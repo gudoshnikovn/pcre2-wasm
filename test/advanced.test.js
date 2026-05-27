@@ -103,6 +103,11 @@ describe('split()', () => {
     assert.deepEqual(pcre2.split('(,)', 'a,b,c'), ['a', ',', 'b', ',', 'c']);
   });
 
+  it('limit with capture groups preserves the remaining subject', () => {
+    // limit=1 means 1 split; captured separator is included; remainder is the last element
+    assert.deepEqual(pcre2.split('(,)', 'a,b,c', 1), ['a', ',', 'b,c']);
+  });
+
   it('unmatched optional group appears as undefined', () => {
     const r = pcre2.split('(x)|(,)', 'a,b');
     // Between 'a' and 'b': group 1 (x) = undefined, group 2 (,) = ','

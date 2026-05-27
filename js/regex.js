@@ -151,8 +151,9 @@ export class PCRE2Regex {
     const matches = this.matchAll(subject, opts);
     const parts = [];
     let pos = 0;
+    let splits = 0;
     for (const m of matches) {
-      if (limit !== undefined && parts.length >= limit) break;
+      if (limit !== undefined && splits >= limit) break;
       parts.push(subject.slice(pos, m.index));
       for (const g of m.groups) parts.push(g ?? undefined);
       pos = m.index + m.match.length;
@@ -160,8 +161,9 @@ export class PCRE2Regex {
         if (pos < subject.length) pos++;
         else break;
       }
+      splits++;
     }
-    if (limit === undefined || parts.length <= limit) parts.push(subject.slice(pos));
+    parts.push(subject.slice(pos));
     return parts;
   }
 
