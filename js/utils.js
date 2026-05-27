@@ -3,6 +3,9 @@ import { PCRE2MatchError } from './errors.js';
 /* Sentinel returned by C when the output buffer is too small (retry needed). */
 export const WASM_BUF_OVERFLOW = -999;
 
+const _encoder = new TextEncoder();
+const _decoder = new TextDecoder();
+
 /* Encode a JS string as UTF-8 in WASM heap. Caller must _free the returned ptr. */
 export function strToWasm(m, s) {
   const len = m.lengthBytesUTF8(s) + 1;
@@ -17,28 +20,29 @@ export function strToWasm(m, s) {
  */
 export function byteOffsetToCharOffset(str, byteOffset) {
   if (byteOffset <= 0) return 0;
-  const bytes = new TextEncoder().encode(str);
-  return new TextDecoder().decode(bytes.subarray(0, byteOffset)).length;
+  const bytes = _encoder.encode(str);
+  return _decoder.decode(bytes.subarray(0, byteOffset)).length;
 }
 
 /* Convert a JS character offset to a UTF-8 byte offset (needed for startPos). */
 export function charOffsetToByteOffset(str, charOffset) {
   if (charOffset <= 0) return 0;
-  return new TextEncoder().encode(str.slice(0, charOffset)).length;
+  return _encoder.encode(str.slice(0, charOffset)).length;
 }
 
 /*
- * Throw a descriptive error for PCRE2 match errors (limit exceeded, etc.).
- * rc = -1 (no match), rc = -2 (partial match), WASM_BUF_OVERFLOW are handled
- * by callers and must not reach this function.
+ * Throw a PCRE2MatchError for real PCRE2 errors (rc < -2, e.g. matchlimit, depthlimit).
+ * rc ≥ -1 (success/no match), rc = -2 (partial), and WASM_BUF_OVERFLOW are not errors —
+ * callers handle them directly.
  */
 export function throwIfMatchError(m, rc) {
-  if (rc >= -1 || rc === -2 || rc === WASM_BUF_OVERFLOW) return;
-  const errBuf = m._malloc(256);
-  m.ccall('pcre2_wasm_error_message', 'number', ['number', 'number', 'number'], [rc, errBuf, 256]);
-  const msg = m.UTF8ToString(errBuf);
-  m._free(errBuf);
-  throw new PCRE2MatchError(`PCRE2 match error: ${msg}`, rc);
+  if (rc < -2 && rc !== WASM_BUF_OVERFLOW) {
+    const errBuf = m._malloc(256);
+    m.ccall('pcre2_wasm_error_message', 'number', ['number', 'number', 'number'], [rc, errBuf, 256]);
+    const msg = m.UTF8ToString(errBuf);
+    m._free(errBuf);
+    throw new PCRE2MatchError(`PCRE2 match error: ${msg}`, rc);
+  }
 }
 
 /*

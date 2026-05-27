@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { createPCRE2 } from '../lib/index.js';
 
+/* Module-level singleton — shared across all hook instances. In HMR environments
+   (Vite, webpack) the module may reload and the WASM instance will be recreated. */
 let sharedInstance = null;
 let sharedPromise = null;
 

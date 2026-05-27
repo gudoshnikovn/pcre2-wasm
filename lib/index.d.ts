@@ -205,8 +205,10 @@ export declare class PCRE2Regex {
    * between the surrounding parts (same as JS String.prototype.split with RegExp).
    * Unmatched optional groups appear as undefined.
    *
-   * @param limit Maximum number of splits. The remaining subject is appended as
-   *              the last element, matching JS / Python split behaviour.
+   * @param limit Maximum number of splits (Python-style). The result has at most
+   *              limit + 1 elements; the remaining subject is the last element.
+   *              Note: this differs from JS String.prototype.split where limit is
+   *              the maximum number of result elements.
    */
   split(subject: string, limit?: number, options?: MatchOptions): (string | undefined)[];
 
