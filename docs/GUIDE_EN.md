@@ -174,7 +174,7 @@ pcre2.matchAll('[а-я]+', 'привет мир', parseFlags('u'))  // same as F
 pcre2.match('^hello', 'hello world', 0, { matchFlags: MATCH_FLAGS.NOTBOL })
 
 // Extra compile-time flags
-pcre2.compile('\\w+', FLAGS.UCP, { extraFlags: EXTRA_FLAGS.ASCII_BSW })
+pcre2.compile('\\w+', FLAGS.UCP, EXTRA_FLAGS.ASCII_BSW)
 ```
 
 ---
@@ -253,28 +253,11 @@ console.log(r.match);  // '42'
 
 ### React hook
 
-```js
-// usePCRE2.js
-import { useState, useEffect, useRef } from 'react';
-import { createPCRE2 } from 'pcre2-wasm';
-
-export function usePCRE2() {
-  const [ready, setReady] = useState(false);
-  const ref = useRef(null);
-
-  useEffect(() => {
-    createPCRE2().then((pcre2) => {
-      ref.current = pcre2;
-      setReady(true);
-    });
-  }, []);
-
-  return { ready, pcre2: ref.current };
-}
-```
+`pcre2-wasm/react` exports a `usePCRE2` hook that loads the WASM module once per app and shares
+the instance across all components.
 
 ```jsx
-import { usePCRE2 } from './usePCRE2';
+import { usePCRE2 } from 'pcre2-wasm/react';
 
 export default function MyComponent() {
   const { ready, pcre2 } = usePCRE2();

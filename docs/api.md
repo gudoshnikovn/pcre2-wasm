@@ -155,13 +155,19 @@ pcre2.replaceAll('\\d+', 'a1 b22 c333', 'N'); // 'aN bN cN'
 Splits `subject` by the pattern. If the pattern contains capture groups, the captured text is
 included between the surrounding parts (same behaviour as `String.prototype.split` with `RegExp`).
 
+`limit` is the **maximum number of splits** (not elements), so the result has at most `limit + 1`
+entries. This matches Python's `re.split` semantics, not JS's `String.prototype.split`.
+
 ```js
 pcre2.split(',\\s*', 'one, two, three'); // ['one', 'two', 'three']
 pcre2.split('(,)', 'a,b,c'); // ['a', ',', 'b', ',', 'c']
-pcre2.split(',\\s*', 'one, two, three', 2); // ['one', 'two, three']
+pcre2.split(',\\s*', 'one, two, three', 1); // ['one', 'two, three']
 ```
 
 Unmatched optional groups appear as `undefined` in the result, matching JS native behaviour.
+
+> **Note:** subjects containing null bytes (`\0`) are truncated at the first null byte because the
+> underlying C API uses null-terminated strings.
 
 ### `patternInfo(pattern, flags?, extraFlags?): PCRE2PatternInfo`
 

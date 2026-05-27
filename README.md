@@ -56,7 +56,12 @@ const pcre2 = await createPCRE2();
 
 // Using FLAG constants
 pcre2.test('hello', 'HELLO world', FLAGS.CASELESS); // true
-pcre2.matchAll('^\\w+', 'foo\nbar\nbaz', FLAGS.MULTILINE); // ['foo', 'bar', 'baz']
+pcre2.matchAll('^\\w+', 'foo\nbar\nbaz', FLAGS.MULTILINE);
+// [
+//   { match: 'foo', index: 0, groups: [] },
+//   { match: 'bar', index: 4, groups: [] },
+//   { match: 'baz', index: 8, groups: [] },
+// ]
 pcre2.test('hello', 'HÉLLO', FLAGS.CASELESS | FLAGS.UTF | FLAGS.UCP); // true
 
 // Using parseFlags — convert a string like 'gi' to a bitmask
@@ -189,7 +194,7 @@ See [docs/api.md](docs/api.md) for the full API reference.
 Requires [Emscripten](https://emscripten.org/).
 
 ```bash
-git clone https://github.com/your-username/pcre2-wasm.git
+git clone https://github.com/gudoshnikovn/pcre2-wasm.git
 cd pcre2-wasm
 make
 ```
