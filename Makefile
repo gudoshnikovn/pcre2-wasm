@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-PCRE2_VERSION := 10.48
+PCRE2_VERSION := 10.49
 
 EMSDK_DIR   := emsdk
 PCRE2_DIR   := pcre2
