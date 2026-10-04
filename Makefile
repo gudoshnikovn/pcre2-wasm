@@ -1,6 +1,8 @@
 SHELL := /bin/bash
 
 PCRE2_VERSION := 10.49
+# Keep in sync with .github/workflows/publish.yml
+EMSDK_VERSION := 5.0.7
 
 EMSDK_DIR   := emsdk
 PCRE2_DIR   := pcre2
@@ -45,8 +47,8 @@ setup: $(EMSDK_DIR)/.emscripten $(PCRE2_DIR)/CMakeLists.txt
 $(EMSDK_DIR)/.emscripten:
 	@echo ">>> Cloning Emscripten SDK..."
 	git clone https://github.com/emscripten-core/emsdk.git $(EMSDK_DIR)
-	@echo ">>> Installing and activating latest Emscripten..."
-	cd $(EMSDK_DIR) && ./emsdk install latest && ./emsdk activate latest
+	@echo ">>> Installing and activating Emscripten $(EMSDK_VERSION)..."
+	cd $(EMSDK_DIR) && ./emsdk install $(EMSDK_VERSION) && ./emsdk activate $(EMSDK_VERSION)
 
 $(PCRE2_DIR)/CMakeLists.txt:
 	@echo ">>> Cloning PCRE2 $(PCRE2_VERSION)..."

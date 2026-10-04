@@ -47,7 +47,7 @@ make build
 | Step | What happens |
 |------|--------------|
 | Clone `emsdk/` | Fetches Emscripten SDK from GitHub |
-| Install emsdk | Runs `./emsdk install latest && ./emsdk activate latest` |
+| Install emsdk | Runs `./emsdk install $(EMSDK_VERSION) && ./emsdk activate $(EMSDK_VERSION)` (version pinned in the Makefile) |
 | Clone `pcre2/` | Clones PCRE2 at the pinned version tag |
 | `emcmake cmake` | Configures PCRE2 for WASM: 8-bit only, no JIT, no tests, static lib |
 | `emmake make` | Compiles PCRE2 → `build/pcre2-cmake/libpcre2-8.a` |
