@@ -81,6 +81,12 @@ pcre2.matchAll('^\\w+', 'foo\nbar', parseFlags('mg')); // ['foo', 'bar']
 | `D`    | `FLAGS.DOLLAR_ENDONLY` | `$` matches only at end of string      |
 | `g`    | _(ignored)_            | No-op — the API is stateless           |
 
+> **Non-ASCII text needs `FLAGS.UTF`.** Strings are passed to PCRE2 as UTF-8, but without
+> `FLAGS.UTF` (or `FLAGS.UCP`, which implies it) PCRE2 treats every byte as a separate character.
+> Then `.` or `[^x]` can match half of a multi-byte character and the result is garbled, e.g.
+> `pcre2.match('.', 'é')` returns `{ match: '�', … }`. With `FLAGS.UTF` it returns `'é'`.
+> Byte mode is kept as the default because it is PCRE2's own default.
+
 ## Compiled patterns
 
 Compile once, reuse many times. Faster when the same pattern is used repeatedly.

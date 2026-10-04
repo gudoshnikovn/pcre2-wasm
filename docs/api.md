@@ -155,7 +155,6 @@ pcre2.replace('\\d+', 'price: 42', 'N'); // 'price: N'
 Same as `replace()` but replaces all non-overlapping matches.
 
 ```js
-pcre2.replaceAll('\\d+', 'a1 b22 c333', 'N'); // 'aN bNN cNNN' — no, actually:
 pcre2.replaceAll('\\d+', 'a1 b22 c333', 'N'); // 'aN bN cN'
 ```
 
@@ -445,6 +444,12 @@ Compile-time flags. Pass as the `flags` argument to any method or to `parseFlags
 | `FLAGS.ALT_BSUX`           | JavaScript-style `\u{HHHH}` escape sequences                   |
 | `FLAGS.LITERAL`            | Treat the entire pattern as a literal string                   |
 | `FLAGS.ALT_EXTENDED_CLASS` | Enable extended character class syntax `[[ ]]`                 |
+
+> **Non-ASCII text needs `FLAGS.UTF`.** Strings are passed to PCRE2 as UTF-8, but without
+> `FLAGS.UTF` (or `FLAGS.UCP`, which implies it) PCRE2 treats every byte as a separate character.
+> Then `.` or `[^x]` can match half of a multi-byte character and the result is garbled, e.g.
+> `pcre2.match('.', 'é')` returns `{ match: '�', … }`. With `FLAGS.UTF` it returns `'é'`.
+> Byte mode is kept as the default because it is PCRE2's own default.
 
 ### `MATCH_FLAGS`
 
