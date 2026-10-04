@@ -195,13 +195,13 @@ export class PCRE2Regex {
     let splits = 0;
     for (const m of matches) {
       if (limit !== undefined && splits >= limit) break;
+      const end = m.index + m.match.length;
+      /* As in JS split: a match ending at the previous split point, or one at the
+         very end of the subject, does not produce a split. */
+      if (end === pos || m.index === subject.length) continue;
       parts.push(subject.slice(pos, m.index));
       for (const g of m.groups) parts.push(g ?? undefined);
-      pos = m.index + m.match.length;
-      if (m.match.length === 0) {
-        if (pos < subject.length) pos++;
-        else break;
-      }
+      pos = end;
       splits++;
     }
     parts.push(subject.slice(pos));

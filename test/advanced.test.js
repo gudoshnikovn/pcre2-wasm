@@ -126,4 +126,20 @@ describe('split()', () => {
       'world',
     ]);
   });
+
+  it('empty pattern splits into characters (like JS split)', () => {
+    assert.deepEqual(pcre2.split('', 'abc'), ['a', 'b', 'c']);
+  });
+
+  it('pattern that can match empty does not drop characters', () => {
+    assert.deepEqual(pcre2.split('x*', 'axbc'), ['a', 'b', 'c']);
+  });
+
+  it('trailing delimiter yields a trailing empty string', () => {
+    assert.deepEqual(pcre2.split(',', 'a,b,'), ['a', 'b', '']);
+  });
+
+  it('limit counts only real splits when pattern can match empty', () => {
+    assert.deepEqual(pcre2.split('', 'abc', 1), ['a', 'bc']);
+  });
 });
