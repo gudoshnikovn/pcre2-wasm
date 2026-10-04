@@ -452,7 +452,7 @@ Compile-time flags. Pass as the `flags` argument to any method or to `parseFlags
 | `FLAGS.DUPNAMES`           | Allow duplicate named groups                                   |
 | `FLAGS.DOLLAR_ENDONLY`     | `$` matches only at the absolute end of the string             |
 | `FLAGS.ALLOW_EMPTY_CLASS`  | Allow `[]` as an empty character class that never matches      |
-| `FLAGS.ALT_BSUX`           | JavaScript-style `\u{HHHH}` escape sequences                   |
+| `FLAGS.ALT_BSUX`           | JavaScript-style `\uHHHH` and `\xHH` escapes; disables `\x{…}` |
 | `FLAGS.LITERAL`            | Treat the entire pattern as a literal string                   |
 | `FLAGS.ALT_EXTENDED_CLASS` | Enable extended character class syntax `[[ ]]`                 |
 

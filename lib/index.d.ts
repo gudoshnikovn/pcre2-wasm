@@ -120,7 +120,7 @@ export declare const FLAGS: {
   readonly DOLLAR_ENDONLY: 0x00000010;
   /** Allow [] as an empty character class that never matches. */
   readonly ALLOW_EMPTY_CLASS: 0x00000001;
-  /** Enable JavaScript-style \\u{HHHH} and \\x{HH} escape sequences. */
+  /** Enable JavaScript-style \\uHHHH and \\xHH escapes (exactly 4 / 2 hex digits); \\x{...} is then not recognised. */
   readonly ALT_BSUX: 0x00000002;
   /** Treat the entire pattern as a literal string — no metacharacters. */
   readonly LITERAL: 0x02000000;

@@ -95,9 +95,11 @@ describe('flags', () => {
     assert.equal(pcre2.test('[]', 'anything', FLAGS.ALLOW_EMPTY_CLASS), false);
   });
 
-  it('ALT_BSUX — JavaScript-style \\u{HHHH} escape sequences', () => {
+  it('ALT_BSUX — JavaScript-style \\uHHHH and \\xHH escapes; \\x{...} is disabled', () => {
     assert.equal(pcre2.test('\\u0041', 'A', FLAGS.ALT_BSUX), true); // A = A
     assert.equal(pcre2.test('\\u0041', 'B', FLAGS.ALT_BSUX), false);
+    assert.equal(pcre2.test('\\x41', 'A', FLAGS.ALT_BSUX), true);
+    assert.equal(pcre2.test('\\x{41}', 'A', FLAGS.ALT_BSUX), false);
   });
 
   it('LITERAL — pattern treated as a literal string', () => {

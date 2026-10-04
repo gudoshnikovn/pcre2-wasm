@@ -26,7 +26,7 @@ export const FLAGS = {
   DUPNAMES:           0x00000040,  // Allow duplicate named groups: (?<name>...)...(?<name>...)
   DOLLAR_ENDONLY:     0x00000010,  // $ matches only at end of string, not before trailing newline
   ALLOW_EMPTY_CLASS:  0x00000001,  // Allow [] as an empty character class (never matches)
-  ALT_BSUX:           0x00000002,  // JavaScript-style \u{HHHH} and \x{HH} escape sequences
+  ALT_BSUX:           0x00000002,  // JavaScript-style \uHHHH and \xHH escapes; disables \x{...}
   LITERAL:            0x02000000,  // Treat the entire pattern as a literal string
   ALT_EXTENDED_CLASS: 0x08000000,  // Enable extended character class syntax [[ ]]
 };
