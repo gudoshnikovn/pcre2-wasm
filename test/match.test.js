@@ -1,6 +1,6 @@
 import { describe, it, before } from 'node:test';
 import assert from 'node:assert/strict';
-import { createPCRE2, FLAGS, PCRE2MatchError } from '../lib/index.js';
+import { createPCRE2, FLAGS, EXTRA_FLAGS, PCRE2MatchError } from '../lib/index.js';
 
 let pcre2;
 
@@ -423,5 +423,24 @@ describe('empty matches (PCRE2 / Perl global-match semantics)', () => {
 
   it('after an empty match before CRLF, both bytes are skipped when CRLF is a newline', () => {
     assert.deepEqual(fmt(pcre2.matchAll('(*ANY)(?m)$', 'a\r\nb')), ['1:', '4:']);
+  });
+});
+
+describe('matchAll() character offsets with \\K', () => {
+  it('a match starting before the previous one (\\K in lookbehind) gets the right index', () => {
+    const r = pcre2.matchAll(
+      '(?<=\\K.{3})b|a',
+      'éaéb',
+      FLAGS.UTF,
+      {},
+      EXTRA_FLAGS.ALLOW_LOOKAROUND_BSK,
+    );
+    assert.deepEqual(
+      r.map((m) => [m.index, m.match]),
+      [
+        [1, 'a'],
+        [0, 'éaéb'],
+      ],
+    );
   });
 });

@@ -35,14 +35,16 @@ export function byteOffsetToCharOffset(str, byteOffset) {
 
 /*
  * Like byteOffsetToCharOffset, but for many offsets into the same string:
- * returns a converter that must be called with non-decreasing byte offsets and
- * resumes from the previous position, so converting all matchAll indexes is O(n).
+ * returns a converter that resumes from the previous position, so converting
+ * all matchAll indexes is O(n). Offsets normally only grow; \K in a lookbehind
+ * can move a match start backwards, which restarts the count.
  */
 export function byteToCharOffsetConverter(str) {
   const bytes = _encoder.encode(str);
   let b = 0;
   let c = 0;
   return (byteOffset) => {
+    if (byteOffset < b) b = c = 0;
     for (; b < byteOffset; b++) {
       const x = bytes[b];
       /* Count lead bytes; a 4-byte sequence is a surrogate pair in UTF-16. */
