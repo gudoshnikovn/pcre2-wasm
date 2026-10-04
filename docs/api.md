@@ -138,14 +138,25 @@ Replaces the **first** match and returns the resulting string.
 
 **Replacement syntax:**
 
-| Token        | Meaning                |
-| ------------ | ---------------------- |
-| `$0` or `$&` | Whole match            |
-| `$1`…`$n`    | Numbered capture group |
-| `${name}`    | Named capture group    |
-| `$$`         | Literal `$`            |
+| Token                 | Meaning                               |
+| --------------------- | ------------------------------------- |
+| `$0` or `$&`          | Whole match                           |
+| `$1`…`$n`             | Numbered capture group                |
+| `${name}`             | Named capture group                   |
+| `$$`                  | Literal `$`                           |
+| `\\`                  | Literal `\`                           |
+| `\$`                  | Literal `$`                           |
+| `\n`, `\t`, `\x41`, … | Escape sequences, as in a pattern     |
+| `\U`…`\E`, `\L`…`\E`  | Upper-/lower-case the text in between |
+| `\u`, `\l`            | Upper-/lower-case the next character  |
+
+Backslash is an escape character in the replacement (PCRE2's extended substitution syntax),
+unlike in JS. Write `\\` for a literal backslash; an unknown escape such as `\p` throws
+`PCRE2MatchError`. To use the replacement verbatim, pass `REPLACE_FLAGS.LITERAL`.
 
 ```js
+pcre2.replace('(\\w+)', 'hello', '\\U$1'); // 'HELLO'
+pcre2.replace('x', 'x', 'C:\\\\dir'); // 'C:\\dir'
 pcre2.replace('(\\w+)', 'hello world', '[$1]'); // '[hello] world'
 pcre2.replace('\\d+', 'price: 42', 'N'); // 'price: N'
 ```

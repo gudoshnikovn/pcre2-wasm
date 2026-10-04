@@ -192,7 +192,8 @@ export declare class PCRE2Regex {
   /**
    * Replaces the first match and returns the resulting string.
    * Replacement syntax: $0 or $& = whole match, $1..$n = numbered group,
-   * ${name} = named group, $$ = literal dollar.
+   * ${name} = named group, $$ = literal dollar. Backslash is an escape character
+   * (\\ = literal backslash, \n, \U…\E, …) unless REPLACE_FLAGS.LITERAL is set.
    */
   replace(subject: string, replacement: string, options?: MatchOptions): string;
 
