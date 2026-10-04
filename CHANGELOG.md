@@ -1,5 +1,21 @@
 # Changelog
 
+## 10.49.2
+
+Documentation-only release: the code is identical to 10.49.1. It ships the corrected README,
+which was finished after 10.49.1 had been published. **Upgrading from 10.49.0?** Read the
+breaking changes of 10.49.1 below.
+
+### Documentation
+
+- Fixed README examples that showed wrong results: `match()` on an email address, the
+  case-insensitive Unicode example and the ReDoS examples, whose subject was too short to hit
+  the limit.
+- New README section "Differences from JavaScript RegExp": byte mode without `FLAGS.UTF`, empty
+  matches, backslash escapes in replacements, `split()` limit, flag letters.
+- The README notes that a destroyed pattern throws, uses `import type` in the TypeScript example,
+  describes the `make` targets correctly and links to this changelog.
+
 ## 10.49.1
 
 A correctness release: several bugs fixed and the behaviour of empty matches aligned with
