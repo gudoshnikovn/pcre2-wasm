@@ -24,8 +24,8 @@ pcre2.test('\\d+', 'price: 42'); // true
 pcre2.test('\\d+', 'no digits here'); // false
 
 // match — first match with capture groups
-pcre2.match('(\\w+)@(\\w+)', 'user@example.com');
-// { match: 'user@example.com', index: 0, groups: ['user', 'example'] }
+pcre2.match('(\\w+)@([\\w.]+)', 'user@example.com');
+// { match: 'user@example.com', index: 0, groups: ['user', 'example.com'] }
 
 // matchAll — all matches
 pcre2.matchAll('\\d+', 'a1 b22 c333');
@@ -65,11 +65,11 @@ pcre2.matchAll('^\\w+', 'foo\nbar\nbaz', FLAGS.MULTILINE);
 //   { match: 'bar', index: 4, groups: [] },
 //   { match: 'baz', index: 8, groups: [] },
 // ]
-pcre2.test('hello', 'HÉLLO', FLAGS.CASELESS | FLAGS.UTF | FLAGS.UCP); // true
+pcre2.test('héllo', 'HÉLLO', FLAGS.CASELESS | FLAGS.UCP); // true (UCP implies UTF)
 
 // Using parseFlags — convert a string like 'gi' to a bitmask
 pcre2.test('hello', 'HELLO world', parseFlags('i')); // true
-pcre2.matchAll('^\\w+', 'foo\nbar', parseFlags('mg')); // ['foo', 'bar']
+pcre2.matchAll('^\\w+', 'foo\nbar', parseFlags('mg')); // matches 'foo' and 'bar'
 ```
 
 | Letter | Flag constant          | Description                            |
@@ -104,6 +104,7 @@ re.count('a@b.com c@d.org'); // 2
 re.replace('x@y.com', '[email]'); // '[email]'
 
 re.destroy(); // free WASM memory when done
+re.test('x'); // throws — a destroyed pattern cannot be used
 ```
 
 ## Lazy iteration — `matchAllIterator()`
@@ -147,7 +148,7 @@ try {
 
 // Match errors carry the raw PCRE2 error code
 try {
-  pcre2.match('^(a+)+$', 'aaaa...c', 0, { matchLimit: 1000 });
+  pcre2.match('^(a+)+$', 'a'.repeat(30) + 'c', 0, { matchLimit: 1000 });
 } catch (e) {
   if (e instanceof PCRE2MatchError) {
     console.warn(`Match aborted (code ${e.code}): ${e.message}`);
@@ -177,8 +178,8 @@ function MyComponent() {
 ## ReDoS protection
 
 ```js
-// Limit backtracking steps — throws PCRE2MatchError if exceeded
-pcre2.test('^(a+)+$', 'aaaa...c', 0, { matchLimit: 10_000 });
+// Limit backtracking steps — throws PCRE2MatchError (code -47) if exceeded
+pcre2.test('^(a+)+$', 'a'.repeat(30) + 'c', 0, { matchLimit: 10_000 });
 
 // Limit recursion depth
 pcre2.match(pattern, subject, 0, { depthLimit: 500 });
@@ -189,15 +190,31 @@ pcre2.match(pattern, subject, 0, { depthLimit: 500 });
 Types are included — no `@types/` package needed.
 
 ```ts
-import { createPCRE2, PCRE2, PCRE2Match, parseFlags } from 'pcre2-wasm';
+import { createPCRE2, type PCRE2, type PCRE2Match } from 'pcre2-wasm';
 
 const pcre2: PCRE2 = await createPCRE2();
 const result: PCRE2Match | null = pcre2.match('(\\d+)', 'abc 123');
 ```
 
+## Differences from JavaScript RegExp
+
+PCRE2 is not the JS regex engine, and this library follows PCRE2 where the two differ:
+
+- **Byte mode by default.** Pass `FLAGS.UTF` (or `FLAGS.UCP`) for non-ASCII text — see [Flags](#flags).
+- **Empty matches.** After an empty match, a non-empty match at the same position is tried
+  before moving on (as in Perl and PHP), so `matchAll('|a', 'a')` yields `''`, `'a'`, `''`
+  where JS yields `''`, `''`. `replaceAll()` substitutes exactly the matches `matchAll()` finds.
+- **Replacement strings.** `$1`, `$<name>`, `$&` and `$$` work as in JS (`${name}` works too), but a backslash is an
+  escape character: `\\` is a literal backslash and `\U$1` upper-cases the group. Pass
+  `REPLACE_FLAGS.LITERAL` to insert the replacement verbatim.
+- **`split(subject, limit)`.** `limit` is the maximum number of splits (as in Python), not of
+  result elements.
+- **Flag letters** follow PCRE/PHP: `U` is ungreedy, not Unicode.
+
 ---
 
-See [docs/api.md](docs/api.md) for the full API reference.
+See [docs/api.md](docs/api.md) for the full API reference and [CHANGELOG.md](CHANGELOG.md) for
+changes between versions.
 
 ## Building from source
 
@@ -209,10 +226,11 @@ cd pcre2-wasm
 make
 ```
 
-| Command      | Description                               |
-| ------------ | ----------------------------------------- |
-| `make`       | Full build (setup + compile)              |
-| `make build` | Compile WASM (assumes setup already done) |
-| `make clean` | Remove build artifacts                    |
+| Command          | Description                                                      |
+| ---------------- | ---------------------------------------------------------------- |
+| `make`           | Full build: install Emscripten and PCRE2 if needed, then compile |
+| `make build`     | Same as `make`                                                   |
+| `make clean`     | Remove build artifacts                                           |
+| `make distclean` | Also remove the downloaded Emscripten SDK and PCRE2 sources      |
 
 See [docs/INTERNALS.md](docs/INTERNALS.md) for the full build walkthrough and architecture overview.
