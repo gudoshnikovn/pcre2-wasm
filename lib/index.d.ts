@@ -219,7 +219,7 @@ export declare class PCRE2Regex {
   destroy(): void;
 }
 
-export declare class PCRE2 {
+export interface PCRE2 {
   /** Compile a pattern into a reusable PCRE2Regex. Caller must call destroy() when done. */
   compile(pattern: string, flags?: number, extraFlags?: number): PCRE2Regex;
 
