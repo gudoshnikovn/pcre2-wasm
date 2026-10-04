@@ -1,7 +1,7 @@
 SHELL := /bin/bash
 
 PCRE2_VERSION := 10.49
-# Keep in sync with .github/workflows/publish.yml
+# Installed into emsdk/ by `make setup` (locally and in CI)
 EMSDK_VERSION := 6.0.11
 
 EMSDK_DIR   := emsdk
