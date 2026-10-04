@@ -76,7 +76,7 @@ pcre2.matchAll('^\\w+', 'foo\nbar', parseFlags('mg')); // ['foo', 'bar']
 | `s`    | `FLAGS.DOTALL`         | `.` matches newline                    |
 | `x`    | `FLAGS.EXTENDED`       | Ignore unescaped whitespace in pattern |
 | `u`    | `FLAGS.UTF`            | UTF-8 mode                             |
-| `U`    | `FLAGS.UCP`            | Unicode properties, auto-enables UTF   |
+| `U`    | `FLAGS.UNGREEDY`       | Invert greediness of quantifiers       |
 | `A`    | `FLAGS.ANCHORED`       | Match only at start of subject         |
 | `D`    | `FLAGS.DOLLAR_ENDONLY` | `$` matches only at end of string      |
 | `g`    | _(ignored)_            | No-op — the API is stateless           |

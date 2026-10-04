@@ -49,7 +49,7 @@ const _FLAG_MAP = {
   s: FLAGS.DOTALL,
   x: FLAGS.EXTENDED,
   u: FLAGS.UTF,
-  U: FLAGS.UCP,
+  U: FLAGS.UNGREEDY,  // as in PHP/PCRE; use FLAGS.UCP for Unicode properties
   A: FLAGS.ANCHORED,
   D: FLAGS.DOLLAR_ENDONLY,
   g: 0,  // stateless API — 'g' is silently ignored

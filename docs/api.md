@@ -261,7 +261,7 @@ Throws `TypeError` for any unrecognised letter.
 | `s`    | `FLAGS.DOTALL`         |
 | `x`    | `FLAGS.EXTENDED`       |
 | `u`    | `FLAGS.UTF`            |
-| `U`    | `FLAGS.UCP`            |
+| `U`    | `FLAGS.UNGREEDY`       |
 | `A`    | `FLAGS.ANCHORED`       |
 | `D`    | `FLAGS.DOLLAR_ENDONLY` |
 | `g`    | `0` (no-op)            |

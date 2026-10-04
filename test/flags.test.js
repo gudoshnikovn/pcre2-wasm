@@ -348,6 +348,11 @@ describe('parseFlags()', () => {
     assert.equal(parseFlags('gi'), FLAGS.CASELESS);
   });
 
+  it('U → UNGREEDY (PHP/PCRE convention)', () => {
+    assert.equal(parseFlags('U'), FLAGS.UNGREEDY);
+    assert.equal(pcre2.match('a+', 'aaa', parseFlags('U')).match, 'a');
+  });
+
   it('all documented letters are accepted without throwing', () => {
     assert.doesNotThrow(() => parseFlags('imsuUxADg'));
   });
