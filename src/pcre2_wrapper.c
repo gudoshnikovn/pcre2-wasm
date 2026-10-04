@@ -254,7 +254,8 @@ int pcre2_wasm_error_message(int errcode, char* buf, uint32_t bufsize) {
 /*
  * First match at or after start_offset. after_empty != 0 means the previous
  * match (ending at start_offset) was empty — see match_next(); used by
- * matchAllIterator to step through matches exactly like matchAll. Returns:
+ * matchAllIterator to step through matches exactly like matchAll. If end_out
+ * is not NULL it receives the byte offset where the match ends. Returns:
  *   > 0                match found; match_buf contains JSON object
  *   -1                 no match (PCRE2_ERROR_NOMATCH)
  *   -2                 partial match (PCRE2_ERROR_PARTIAL); JSON written with "partial":true
@@ -271,7 +272,7 @@ int pcre2_wasm_match(pcre2_code* re, const char* subject, uint32_t subject_len,
                      char* match_buf, uint32_t match_buf_size,
                      uint32_t match_limit, uint32_t depth_limit,
                      uint32_t start_offset, uint32_t match_flags,
-                     uint32_t after_empty) {
+                     uint32_t after_empty, uint32_t* end_out) {
     if (!re || !subject) return -1;
 
     PCRE2_SIZE subj_len = (PCRE2_SIZE)subject_len;
@@ -285,6 +286,8 @@ int pcre2_wasm_match(pcre2_code* re, const char* subject, uint32_t subject_len,
     if (rc > 0 && end_before_start(md)) rc = PCRE2_ERROR_BADSUBSPATTERN;
 
     int is_partial = (rc == PCRE2_ERROR_PARTIAL);
+    if ((rc > 0 || is_partial) && end_out)
+        *end_out = (uint32_t)pcre2_get_ovector_pointer(md)[1];
     if ((rc > 0 || is_partial) && match_buf && match_buf_size > 2) {
         NameTable nt;
         nt_load(re, &nt);

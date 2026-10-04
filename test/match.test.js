@@ -1,6 +1,6 @@
 import { describe, it, before } from 'node:test';
 import assert from 'node:assert/strict';
-import { createPCRE2, FLAGS, EXTRA_FLAGS, PCRE2MatchError } from '../lib/index.js';
+import { createPCRE2, FLAGS, MATCH_FLAGS, EXTRA_FLAGS, PCRE2MatchError } from '../lib/index.js';
 
 let pcre2;
 
@@ -256,6 +256,32 @@ describe('matchAllIterator()', () => {
     const expected = pcre2.matchAll('\\d+', 'a1 b22 c333').map((m) => m.match);
     const actual = [...pcre2.matchAllIterator('\\d+', 'a1 b22 c333')].map((m) => m.match);
     assert.deepEqual(actual, expected);
+  });
+
+  it('yields identical match objects to matchAll() for Unicode, groups and startPos', () => {
+    const cases = [
+      ['(?<w>\\w)(\\d)?', 'é1 я2 😀x 中', FLAGS.UCP, {}],
+      ['\\S+', 'а б 😀 в', FLAGS.UTF, { startPos: 2 }],
+      ['x*', '😀x😀', FLAGS.UTF, {}],
+      ['abc', 'xxab', 0, { matchFlags: MATCH_FLAGS.PARTIAL_HARD }],
+    ];
+    for (const [pattern, subject, flags, opts] of cases) {
+      const expected = pcre2.matchAll(pattern, subject, flags, opts);
+      assert.deepEqual(
+        [...pcre2.matchAllIterator(pattern, subject, flags, opts)],
+        expected,
+        pattern,
+      );
+    }
+  });
+
+  it('destroying the regex stops a running iterator with an error', () => {
+    const re = pcre2.compile('a');
+    const it = re.matchAllIterator('aaa');
+    it.next();
+    re.destroy();
+    assert.throws(() => it.next(), /destroyed/);
+    assert.deepEqual(it.next(), { value: undefined, done: true });
   });
 
   it('returns an iterator, not an array', () => {

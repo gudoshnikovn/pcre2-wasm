@@ -25,6 +25,11 @@ const _registry = new FinalizationRegistry(({ mod, ptr }) => {
   if (ptr) mod.ccall('pcre2_wasm_free', null, ['number'], [ptr]);
 });
 
+/* Frees the WASM buffers of matchAllIterator() iterators dropped before finishing. */
+const _bufferRegistry = new FinalizationRegistry(({ mod, ptrs }) => {
+  for (const p of ptrs) mod._free(p);
+});
+
 /* ── Compiled regex handle ──────────────────────────────────────────────── */
 
 export class PCRE2Regex {
@@ -67,8 +72,21 @@ export class PCRE2Regex {
         'number',
         'number',
         'number',
+        'number',
       ],
-      [this.#ptr, subjectPtr, subjectLen, 0, 0, matchLimit, depthLimit, startByte, matchFlags, 0],
+      [
+        this.#ptr,
+        subjectPtr,
+        subjectLen,
+        0,
+        0,
+        matchLimit,
+        depthLimit,
+        startByte,
+        matchFlags,
+        0,
+        0,
+      ],
     );
     m._free(subjectPtr);
     throwIfMatchError(m, rc);
@@ -80,52 +98,12 @@ export class PCRE2Regex {
    * Shape: { match, index, groups, namedGroups? }
    */
   match(subject, opts = {}) {
-    return this.#match(subject, opts, false);
-  }
-
-  /* afterEmpty: the previous match ended at startPos and was empty (see match_next in C). */
-  #match(
-    subject,
-    { matchLimit = 0, depthLimit = 0, startPos = 0, matchFlags = 0 } = {},
-    afterEmpty,
-  ) {
     this.#assertAlive();
     const m = this.#mod;
     const { ptr: subjectPtr, len: subjectLen } = strToWasm(m, subject);
-    const startByte = charOffsetToByteOffset(subject, startPos);
     try {
-      const { rc, text } = withBuffer(m, 16 * 1024, (buf, size) =>
-        m.ccall(
-          'pcre2_wasm_match',
-          'number',
-          [
-            'number',
-            'number',
-            'number',
-            'number',
-            'number',
-            'number',
-            'number',
-            'number',
-            'number',
-            'number',
-          ],
-          [
-            this.#ptr,
-            subjectPtr,
-            subjectLen,
-            buf,
-            size,
-            matchLimit,
-            depthLimit,
-            startByte,
-            matchFlags,
-            afterEmpty ? 1 : 0,
-          ],
-        ),
-      );
-      throwIfMatchError(m, rc);
-      const result = rc > 0 || rc === -2 ? JSON.parse(text) : null;
+      const startByte = charOffsetToByteOffset(subject, opts.startPos ?? 0);
+      const result = this.#matchBytes(subjectPtr, subjectLen, startByte, opts, false, 0);
       if (result) result.index = byteOffsetToCharOffset(subject, result.index);
       return result;
     } finally {
@@ -134,19 +112,95 @@ export class PCRE2Regex {
   }
 
   /*
+   * Runs pcre2_wasm_match on a subject already in WASM memory. Returns the parsed
+   * match with index as a byte offset, or null. afterEmpty: the previous match
+   * ended at startByte and was empty (see match_next in C). endPtr, if not 0,
+   * receives the byte offset where the match ends.
+   */
+  #matchBytes(
+    subjectPtr,
+    subjectLen,
+    startByte,
+    { matchLimit = 0, depthLimit = 0, matchFlags = 0 },
+    afterEmpty,
+    endPtr,
+  ) {
+    this.#assertAlive();
+    const m = this.#mod;
+    const { rc, text } = withBuffer(m, 16 * 1024, (buf, size) =>
+      m.ccall(
+        'pcre2_wasm_match',
+        'number',
+        [
+          'number',
+          'number',
+          'number',
+          'number',
+          'number',
+          'number',
+          'number',
+          'number',
+          'number',
+          'number',
+          'number',
+        ],
+        [
+          this.#ptr,
+          subjectPtr,
+          subjectLen,
+          buf,
+          size,
+          matchLimit,
+          depthLimit,
+          startByte,
+          matchFlags,
+          afterEmpty ? 1 : 0,
+          endPtr,
+        ],
+      ),
+    );
+    throwIfMatchError(m, rc);
+    return rc > 0 || rc === -2 ? JSON.parse(text) : null;
+  }
+
+  /*
    * Lazy generator — yields one match at a time, stopping on break.
    * Yields the same matches as matchAll(); like matchAll() it stops after a partial match.
    */
-  *matchAllIterator(subject, opts = {}) {
-    let startPos = opts.startPos ?? 0;
-    let afterEmpty = false;
-    while (true) {
-      const m = this.#match(subject, { ...opts, startPos }, afterEmpty);
-      if (!m) break;
-      yield m;
-      if (m.partial) break;
-      startPos = m.index + m.match.length;
-      afterEmpty = m.match.length === 0;
+  matchAllIterator(subject, opts = {}) {
+    this.#assertAlive();
+    /* The generator keeps the subject in WASM memory between steps and frees it in
+       its finally block (on completion, break or return()). If an unfinished
+       iterator is dropped without being closed, the registry frees it instead. */
+    const held = { mod: this.#mod, ptrs: [] };
+    const iterator = this.#iterate(subject, opts, held);
+    _bufferRegistry.register(iterator, held);
+    return iterator;
+  }
+
+  *#iterate(subject, opts, held) {
+    const m = this.#mod;
+    const { ptr: subjectPtr, len: subjectLen } = strToWasm(m, subject);
+    const endPtr = m._malloc(4);
+    held.ptrs = [subjectPtr, endPtr];
+    try {
+      const toCharOffset = byteToCharOffsetConverter(subject);
+      let startByte = charOffsetToByteOffset(subject, opts.startPos ?? 0);
+      let afterEmpty = false;
+      while (true) {
+        const r = this.#matchBytes(subjectPtr, subjectLen, startByte, opts, afterEmpty, endPtr);
+        if (!r) break;
+        const endByte = m.getValue(endPtr, 'i32') >>> 0;
+        afterEmpty = endByte === r.index;
+        startByte = endByte;
+        r.index = toCharOffset(r.index);
+        yield r;
+        if (r.partial) break;
+      }
+    } finally {
+      m._free(subjectPtr);
+      m._free(endPtr);
+      held.ptrs = [];
     }
   }
 
