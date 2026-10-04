@@ -165,7 +165,8 @@ npm install pcre2-wasm react
 import { usePCRE2 } from 'pcre2-wasm/react';
 
 function MyComponent() {
-  const { ready, pcre2 } = usePCRE2();
+  const { ready, pcre2, error } = usePCRE2();
+  if (error) return <p>Failed to load PCRE2: {error.message}</p>;
   if (!ready) return <p>Loading…</p>;
 
   const matches = pcre2.matchAll('\\d+', 'price: 100 qty: 5');

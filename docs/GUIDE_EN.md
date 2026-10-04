@@ -254,7 +254,8 @@ console.log(r.match);  // '42'
 ### React hook
 
 `pcre2-wasm/react` exports a `usePCRE2` hook that loads the WASM module once per app and shares
-the instance across all components.
+the instance across all components. If loading fails, `error` is set and the next component that
+mounts the hook retries.
 
 ```jsx
 import { usePCRE2 } from 'pcre2-wasm/react';

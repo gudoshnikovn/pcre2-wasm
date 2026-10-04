@@ -3,6 +3,8 @@ import type { PCRE2 } from './index.js';
 export interface UsePCRE2Result {
   ready: boolean;
   pcre2: PCRE2 | null;
+  /** Set if loading the WASM module failed; a later mount of the hook retries. */
+  error: Error | null;
 }
 
 /**

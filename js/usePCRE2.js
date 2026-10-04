@@ -8,6 +8,7 @@ let sharedPromise = null;
 
 export function usePCRE2() {
   const [ready, setReady] = useState(!!sharedInstance);
+  const [error, setError] = useState(null);
   const pcre2 = useRef(sharedInstance);
 
   useEffect(() => {
@@ -18,17 +19,27 @@ export function usePCRE2() {
     }
 
     if (!sharedPromise) {
-      sharedPromise = createPCRE2().then((instance) => {
-        sharedInstance = instance;
-        return instance;
-      });
+      sharedPromise = createPCRE2().then(
+        (instance) => {
+          sharedInstance = instance;
+          return instance;
+        },
+        (err) => {
+          /* Forget the failure so that the next mount retries. */
+          sharedPromise = null;
+          throw err;
+        },
+      );
     }
 
-    sharedPromise.then((instance) => {
-      pcre2.current = instance;
-      setReady(true);
-    });
+    sharedPromise.then(
+      (instance) => {
+        pcre2.current = instance;
+        setReady(true);
+      },
+      (err) => setError(err),
+    );
   }, []);
 
-  return { ready, pcre2: pcre2.current };
+  return { ready, pcre2: pcre2.current, error };
 }
