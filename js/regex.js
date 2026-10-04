@@ -6,6 +6,7 @@ import {
   withBuffer,
   wasmToStr,
 } from './utils.js';
+import { REPLACE_FLAGS } from './constants.js';
 
 /* ── Automatic WASM memory cleanup ─────────────────────────────────────── */
 
@@ -238,8 +239,12 @@ export class PCRE2Regex {
   ) {
     this.#assertAlive();
     const m = this.#mod;
-    /* PCRE2 uses $0 for the whole match; JS uses $&. Normalise before passing to C. */
-    const repl = replacement.replace(/\$&/g, '$0');
+    /* PCRE2 uses $0 for the whole match; JS uses $&. Normalise before passing to C,
+       skipping escaped $$ and leaving LITERAL replacements untouched. */
+    const repl =
+      replaceFlags & REPLACE_FLAGS.LITERAL
+        ? replacement
+        : replacement.replace(/\$[$&]/g, (s) => (s === '$&' ? '$0' : s));
     const { ptr: subjectPtr, len: subjectLen } = strToWasm(m, subject);
     const { ptr: replPtr, len: replLen } = strToWasm(m, repl);
     const outLenPtr = m._malloc(4);

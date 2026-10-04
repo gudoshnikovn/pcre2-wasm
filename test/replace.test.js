@@ -146,3 +146,22 @@ describe('NUL bytes in replace', () => {
     assert.equal(pcre2.replace('x', 'x', 'a\0b'), 'a\0b');
   });
 });
+
+/* ── $& normalisation ───────────────────────────────────────────────────── */
+
+describe('$& in replacement', () => {
+  it('$& is the whole match', () => {
+    assert.equal(pcre2.replace('b', 'abc', '[$&]'), 'a[b]c');
+  });
+
+  it('$$& is a literal "$&"', () => {
+    assert.equal(pcre2.replace('b', 'abc', '$$&'), 'a$&c');
+  });
+
+  it('REPLACE_FLAGS.LITERAL keeps $& verbatim', () => {
+    assert.equal(
+      pcre2.replace('b', 'abc', '$&', 0, { replaceFlags: REPLACE_FLAGS.LITERAL }),
+      'a$&c',
+    );
+  });
+});
