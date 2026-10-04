@@ -6,12 +6,21 @@ export const WASM_BUF_OVERFLOW = -999;
 const _encoder = new TextEncoder();
 const _decoder = new TextDecoder();
 
-/* Encode a JS string as UTF-8 in WASM heap. Caller must _free the returned ptr. */
+/*
+ * Encode a JS string as UTF-8 in WASM heap. Returns { ptr, len } where len is the
+ * byte length without the terminator (the string may contain NUL bytes).
+ * Caller must _free the returned ptr.
+ */
 export function strToWasm(m, s) {
-  const len = m.lengthBytesUTF8(s) + 1;
-  const ptr = m._malloc(len);
-  m.stringToUTF8(s, ptr, len);
-  return ptr;
+  const len = m.lengthBytesUTF8(s);
+  const ptr = m._malloc(len + 1);
+  m.stringToUTF8(s, ptr, len + 1);
+  return { ptr, len };
+}
+
+/* Decode len bytes of UTF-8 from WASM heap (unlike UTF8ToString, does not stop at NUL). */
+export function wasmToStr(m, ptr, len) {
+  return _decoder.decode(m.HEAPU8.subarray(ptr, ptr + len));
 }
 
 /*
@@ -38,7 +47,12 @@ export function charOffsetToByteOffset(str, charOffset) {
 export function throwIfMatchError(m, rc) {
   if (rc < -2 && rc !== WASM_BUF_OVERFLOW) {
     const errBuf = m._malloc(256);
-    m.ccall('pcre2_wasm_error_message', 'number', ['number', 'number', 'number'], [rc, errBuf, 256]);
+    m.ccall(
+      'pcre2_wasm_error_message',
+      'number',
+      ['number', 'number', 'number'],
+      [rc, errBuf, 256],
+    );
     const msg = m.UTF8ToString(errBuf);
     m._free(errBuf);
     throw new PCRE2MatchError(`PCRE2 match error: ${msg}`, rc);
@@ -46,12 +60,13 @@ export function throwIfMatchError(m, rc) {
 }
 
 /*
- * Call fn(buf, size) repeatedly, doubling the buffer on WASM_BUF_OVERFLOW.
- * Returns { rc, text } where text is the null-terminated string written by fn.
+ * Call fn(buf, size) repeatedly, quadrupling the buffer on WASM_BUF_OVERFLOW.
+ * Returns { rc, text } where text is read(buf, rc) — by default the
+ * null-terminated string written by fn.
  * Any rc other than WASM_BUF_OVERFLOW — including error codes — is returned
  * as-is; the caller is responsible for checking it.
  */
-export function withBuffer(m, initialSize, fn) {
+export function withBuffer(m, initialSize, fn, read = (buf) => m.UTF8ToString(buf)) {
   let size = initialSize;
   for (let attempt = 0; attempt < 8; attempt++) {
     const buf = m._malloc(size);
@@ -61,7 +76,7 @@ export function withBuffer(m, initialSize, fn) {
       size *= 4;
       continue;
     }
-    const text = m.UTF8ToString(buf);
+    const text = read(buf, rc);
     m._free(buf);
     return { rc, text };
   }

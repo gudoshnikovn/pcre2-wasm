@@ -134,3 +134,15 @@ describe('REPLACE_FLAGS', () => {
     );
   });
 });
+
+/* ── NUL bytes ──────────────────────────────────────────────────────────── */
+
+describe('NUL bytes in replace', () => {
+  it('subject containing \\0 is replaced past the NUL', () => {
+    assert.equal(pcre2.replaceAll('b', 'a\0b\0b', 'X'), 'a\0X\0X');
+  });
+
+  it('replacement containing \\0 is kept whole', () => {
+    assert.equal(pcre2.replace('x', 'x', 'a\0b'), 'a\0b');
+  });
+});

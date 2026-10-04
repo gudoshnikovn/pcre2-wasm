@@ -153,7 +153,8 @@ static pcre2_match_context* make_mctx(uint32_t match_limit, uint32_t depth_limit
  * extra_flags: PCRE2_EXTRA_* bits (pass 0 for none).
  */
 EMSCRIPTEN_KEEPALIVE
-pcre2_code* pcre2_wasm_compile(const char* pattern, uint32_t flags,
+pcre2_code* pcre2_wasm_compile(const char* pattern, uint32_t pattern_len,
+                                uint32_t flags,
                                 char* error_buf, uint32_t* error_offset,
                                 uint32_t extra_flags) {
     int errcode = 0;
@@ -166,7 +167,7 @@ pcre2_code* pcre2_wasm_compile(const char* pattern, uint32_t flags,
     }
 
     pcre2_code* re = pcre2_compile(
-        (PCRE2_SPTR)pattern, PCRE2_ZERO_TERMINATED,
+        (PCRE2_SPTR)pattern, (PCRE2_SIZE)pattern_len,
         flags, &errcode, &erroffset, cctx
     );
     if (cctx) pcre2_compile_context_free(cctx);
@@ -201,13 +202,13 @@ int pcre2_wasm_error_message(int errcode, char* buf, uint32_t bufsize) {
  * namedGroups is omitted when the pattern has no named groups.
  */
 EMSCRIPTEN_KEEPALIVE
-int pcre2_wasm_match(pcre2_code* re, const char* subject,
+int pcre2_wasm_match(pcre2_code* re, const char* subject, uint32_t subject_len,
                      char* match_buf, uint32_t match_buf_size,
                      uint32_t match_limit, uint32_t depth_limit,
                      uint32_t start_offset, uint32_t match_flags) {
     if (!re || !subject) return -1;
 
-    PCRE2_SIZE subj_len = strlen(subject);
+    PCRE2_SIZE subj_len = (PCRE2_SIZE)subject_len;
     pcre2_match_data* md = pcre2_match_data_create_from_pattern(re, NULL);
     if (!md) return -48;
 
@@ -248,13 +249,13 @@ int pcre2_wasm_match(pcre2_code* re, const char* subject,
  * JSON format: [{"match":"...","index":N,"groups":[...]},...]
  */
 EMSCRIPTEN_KEEPALIVE
-int pcre2_wasm_match_all(pcre2_code* re, const char* subject,
+int pcre2_wasm_match_all(pcre2_code* re, const char* subject, uint32_t subject_len,
                           char* match_buf, uint32_t match_buf_size,
                           uint32_t match_limit, uint32_t depth_limit,
                           uint32_t start_offset, uint32_t match_flags) {
     if (!re || !subject) return -1;
 
-    PCRE2_SIZE subj_len = strlen(subject);
+    PCRE2_SIZE subj_len = (PCRE2_SIZE)subject_len;
     pcre2_match_data* md = pcre2_match_data_create_from_pattern(re, NULL);
     if (!md) return -48;
 
@@ -350,14 +351,16 @@ int pcre2_wasm_match_all(pcre2_code* re, const char* subject,
  * match_limit / depth_limit: 0 means use PCRE2 built-in defaults (no cap).
  *
  * Returns:
- *   >= 0  number of substitutions; out_buf contains the result string
+ *   >= 0  number of substitutions; out_buf contains the result string and
+ *         *out_len_ptr its length in bytes (the result may contain NUL bytes)
  *   -2    out_buf too small — retry with a larger buffer
  *   < -2  PCRE2 error
  */
 EMSCRIPTEN_KEEPALIVE
-int pcre2_wasm_replace(pcre2_code* re, const char* subject,
-                        const char* replacement, int global,
-                        char* out_buf, uint32_t out_buf_size,
+int pcre2_wasm_replace(pcre2_code* re, const char* subject, uint32_t subject_len,
+                        const char* replacement, uint32_t replacement_len,
+                        int global,
+                        char* out_buf, uint32_t out_buf_size, uint32_t* out_len_ptr,
                         uint32_t match_limit, uint32_t depth_limit,
                         uint32_t start_offset, uint32_t match_flags,
                         uint32_t replace_flags) {
@@ -378,14 +381,15 @@ int pcre2_wasm_replace(pcre2_code* re, const char* subject,
 
     int rc = pcre2_substitute(
         re,
-        (PCRE2_SPTR)subject, PCRE2_ZERO_TERMINATED,
+        (PCRE2_SPTR)subject, (PCRE2_SIZE)subject_len,
         (PCRE2_SIZE)start_offset, opts,
         NULL, mctx,
-        (PCRE2_SPTR)replacement, PCRE2_ZERO_TERMINATED,
+        (PCRE2_SPTR)replacement, (PCRE2_SIZE)replacement_len,
         (PCRE2_UCHAR*)out_buf, &out_len
     );
 
     if (mctx) pcre2_match_context_free(mctx);
+    if (rc >= 0 && out_len_ptr) *out_len_ptr = (uint32_t)out_len;
     return (rc == PCRE2_ERROR_NOMEMORY) ? WASM_BUF_OVERFLOW : rc;
 }
 

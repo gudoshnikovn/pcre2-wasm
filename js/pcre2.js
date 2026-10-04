@@ -34,15 +34,15 @@ export class PCRE2 {
     if (flags & FLAGS.UCP) flags |= FLAGS.UTF;
 
     const m = this.#mod;
-    const patternPtr = strToWasm(m, pattern);
+    const { ptr: patternPtr, len: patternLen } = strToWasm(m, pattern);
     const errBuf = m._malloc(256);
     const errOffBuf = m._malloc(4);
 
     const ptr = m.ccall(
       'pcre2_wasm_compile',
       'number',
-      ['number', 'number', 'number', 'number', 'number'],
-      [patternPtr, flags, errBuf, errOffBuf, extraFlags],
+      ['number', 'number', 'number', 'number', 'number', 'number'],
+      [patternPtr, patternLen, flags, errBuf, errOffBuf, extraFlags],
     );
 
     m._free(patternPtr);

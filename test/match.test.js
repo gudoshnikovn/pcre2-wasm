@@ -359,3 +359,24 @@ describe('count()', () => {
     re.destroy();
   });
 });
+
+/* ── NUL bytes ──────────────────────────────────────────────────────────── */
+
+describe('NUL bytes', () => {
+  it('subject containing \\0 is not truncated', () => {
+    assert.deepEqual(pcre2.match('b', 'a\0b'), { match: 'b', index: 2, groups: [] });
+  });
+
+  it('matchAll / count see past \\0', () => {
+    assert.equal(pcre2.count('b', 'b\0b\0b'), 3);
+    assert.deepEqual(
+      pcre2.matchAll('b', 'b\0b').map((m) => m.index),
+      [0, 2],
+    );
+  });
+
+  it('pattern containing \\0 is not truncated', () => {
+    assert.equal(pcre2.test('a\0b', 'ab'), false);
+    assert.equal(pcre2.test('a\0b', 'a\0b'), true);
+  });
+});
