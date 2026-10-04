@@ -33,6 +33,25 @@ export function byteOffsetToCharOffset(str, byteOffset) {
   return _decoder.decode(bytes.subarray(0, byteOffset)).length;
 }
 
+/*
+ * Like byteOffsetToCharOffset, but for many offsets into the same string:
+ * returns a converter that must be called with non-decreasing byte offsets and
+ * resumes from the previous position, so converting all matchAll indexes is O(n).
+ */
+export function byteToCharOffsetConverter(str) {
+  const bytes = _encoder.encode(str);
+  let b = 0;
+  let c = 0;
+  return (byteOffset) => {
+    for (; b < byteOffset; b++) {
+      const x = bytes[b];
+      /* Count lead bytes; a 4-byte sequence is a surrogate pair in UTF-16. */
+      if ((x & 0xc0) !== 0x80) c += x >= 0xf0 ? 2 : 1;
+    }
+    return c;
+  };
+}
+
 /* Convert a JS character offset to a UTF-8 byte offset (needed for startPos). */
 export function charOffsetToByteOffset(str, charOffset) {
   if (charOffset <= 0) return 0;

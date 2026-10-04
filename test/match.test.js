@@ -380,3 +380,16 @@ describe('NUL bytes', () => {
     assert.equal(pcre2.test('a\0b', 'a\0b'), true);
   });
 });
+
+/* ── Character offsets ──────────────────────────────────────────────────── */
+
+describe('matchAll() character offsets', () => {
+  it('indexes match JS on mixed 1/2/3/4-byte text', () => {
+    const s = 'a é я 中 😀 b 😀😀 c';
+    const expected = [...s.matchAll(/\S+/gu)].map((m) => m.index);
+    assert.deepEqual(
+      pcre2.matchAll('\\S+', s, FLAGS.UTF).map((m) => m.index),
+      expected,
+    );
+  });
+});

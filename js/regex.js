@@ -1,6 +1,7 @@
 import {
   strToWasm,
   byteOffsetToCharOffset,
+  byteToCharOffsetConverter,
   charOffsetToByteOffset,
   throwIfMatchError,
   withBuffer,
@@ -53,14 +54,14 @@ export class PCRE2Regex {
     const { ptr: subjectPtr, len: subjectLen } = strToWasm(m, subject);
     const startByte = charOffsetToByteOffset(subject, startPos);
     const rc = m.ccall(
-      'pcre2_wasm_match_all',
+      'pcre2_wasm_match',
       'number',
       ['number', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number'],
       [this.#ptr, subjectPtr, subjectLen, 0, 0, matchLimit, depthLimit, startByte, matchFlags],
     );
     m._free(subjectPtr);
     throwIfMatchError(m, rc);
-    return rc > 0;
+    return rc > 0 || rc === -2;
   }
 
   /*
@@ -159,7 +160,8 @@ export class PCRE2Regex {
       );
       throwIfMatchError(m, rc);
       const result = rc > 0 ? JSON.parse(text) : [];
-      for (const r of result) r.index = byteOffsetToCharOffset(subject, r.index);
+      const toCharOffset = byteToCharOffsetConverter(subject);
+      for (const r of result) r.index = toCharOffset(r.index);
       return result;
     } finally {
       m._free(subjectPtr);
