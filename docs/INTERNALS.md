@@ -102,9 +102,9 @@ Both `pcre2_wasm_match` and `pcre2_wasm_match_all` write into a buffer pre-alloc
 
 `match_limit` and `depth_limit` parameters are forwarded to a `pcre2_match_context`. Both default to 0 (PCRE2 built-in defaults, effectively unlimited). Pass non-zero values to cap backtracking and recursion depth — essential for ReDoS protection when running user-supplied patterns.
 
-### UTF-8 zero-length match advance
+### Empty matches in global matching
 
-When `pcre2_wasm_match_all` encounters a zero-length match in UTF-8 mode, the offset is advanced by one byte and then skipped forward past any UTF-8 continuation bytes (`0x80–0xBF`). Without this, the next `pcre2_match` call would receive a mid-codepoint offset and return `PCRE2_ERROR_BADUTFOFFSET`.
+`match_next` implements PCRE2's global-matching rule (as in `pcre2demo` and `pcre2_substitute`), shared by `pcre2_wasm_match_all` and — via its `after_empty` argument — by `pcre2_wasm_match` for `matchAllIterator`. After an empty match, it first retries at the same offset with `PCRE2_NOTEMPTY_ATSTART | PCRE2_ANCHORED`. Only if that fails does it advance: by two bytes over CRLF when CRLF is a newline, otherwise by one byte, skipping UTF-8 continuation bytes (`0x80–0xBF`) in UTF mode — a mid-codepoint offset would make `pcre2_match` return `PCRE2_ERROR_BADUTFOFFSET`.
 
 ---
 

@@ -393,3 +393,35 @@ describe('matchAll() character offsets', () => {
     );
   });
 });
+
+/* ── Empty matches in global matching ───────────────────────────────────── */
+
+describe('empty matches (PCRE2 / Perl global-match semantics)', () => {
+  // Expected values are what Perl's m//g produces.
+  const cases = [
+    ['|a', 'a', ['0:', '0:a', '1:']],
+    ['x*', 'axbc', ['0:', '1:x', '2:', '3:', '4:']],
+    ['a|', 'ab', ['0:a', '1:', '2:']],
+    ['\\b', 'ab cd', ['0:', '2:', '3:', '5:']],
+  ];
+  const fmt = (ms) => ms.map((m) => `${m.index}:${m.match}`);
+
+  for (const [pattern, subject, expected] of cases) {
+    it(`matchAll / matchAllIterator / count agree on /${pattern}/ in "${subject}"`, () => {
+      assert.deepEqual(fmt(pcre2.matchAll(pattern, subject)), expected);
+      assert.deepEqual(fmt([...pcre2.matchAllIterator(pattern, subject)]), expected);
+      assert.equal(pcre2.count(pattern, subject), expected.length);
+    });
+  }
+
+  it('replaceAll substitutes exactly the matches matchAll returns', () => {
+    for (const [pattern, subject, expected] of cases) {
+      const replaced = pcre2.replaceAll(pattern, subject, '[$0]');
+      assert.equal(replaced.split('[').length - 1, expected.length, pattern);
+    }
+  });
+
+  it('after an empty match before CRLF, both bytes are skipped when CRLF is a newline', () => {
+    assert.deepEqual(fmt(pcre2.matchAll('(*ANY)(?m)$', 'a\r\nb')), ['1:', '4:']);
+  });
+});

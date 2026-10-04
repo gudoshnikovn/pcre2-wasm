@@ -168,6 +168,46 @@ static int end_before_start(pcre2_match_data* md) {
     return ov[1] < ov[0];
 }
 
+/*
+ * Find the next match at or after offset, following PCRE2's rule for global
+ * matching (as in pcre2demo, pcre2_substitute and Perl): after an empty match,
+ * first look for a non-empty match anchored at the same position, and only if
+ * there is none move on by one character — a whole code point in UTF mode, or
+ * both bytes of CRLF when CRLF is a newline.
+ */
+static int match_next(pcre2_code* re, const char* subject, PCRE2_SIZE subj_len,
+                      PCRE2_SIZE offset, int after_empty, uint32_t flags,
+                      pcre2_match_data* md, pcre2_match_context* mctx) {
+    if (after_empty) {
+        int rc = pcre2_match(re, (PCRE2_SPTR)subject, subj_len, offset,
+                             flags | PCRE2_NOTEMPTY_ATSTART | PCRE2_ANCHORED, md, mctx);
+        if (rc != PCRE2_ERROR_NOMATCH) return rc;
+        if (offset >= subj_len) return PCRE2_ERROR_NOMATCH;
+
+        uint32_t allopts = 0, newline = 0;
+        pcre2_pattern_info(re, PCRE2_INFO_ALLOPTIONS, &allopts);
+        pcre2_pattern_info(re, PCRE2_INFO_NEWLINE, &newline);
+        int crlf_is_newline = newline == PCRE2_NEWLINE_CRLF ||
+                              newline == PCRE2_NEWLINE_ANY ||
+                              newline == PCRE2_NEWLINE_ANYCRLF;
+
+        if (crlf_is_newline && offset + 1 < subj_len &&
+            subject[offset] == '\r' && subject[offset + 1] == '\n') {
+            offset += 2;
+        } else {
+            offset++;
+            if (allopts & PCRE2_UTF) {
+                /* Skip UTF-8 continuation bytes (0x80–0xBF): a mid-codepoint
+                   offset makes pcre2_match return PCRE2_ERROR_BADUTFOFFSET. */
+                while (offset < subj_len &&
+                       ((unsigned char)subject[offset] & 0xC0) == 0x80)
+                    offset++;
+            }
+        }
+    }
+    return pcre2_match(re, (PCRE2_SPTR)subject, subj_len, offset, flags, md, mctx);
+}
+
 /* ── Public API ─────────────────────────────────────────────────────────── */
 
 /*
@@ -212,7 +252,9 @@ int pcre2_wasm_error_message(int errcode, char* buf, uint32_t bufsize) {
 }
 
 /*
- * First match. Returns:
+ * First match at or after start_offset. after_empty != 0 means the previous
+ * match (ending at start_offset) was empty — see match_next(); used by
+ * matchAllIterator to step through matches exactly like matchAll. Returns:
  *   > 0                match found; match_buf contains JSON object
  *   -1                 no match (PCRE2_ERROR_NOMATCH)
  *   -2                 partial match (PCRE2_ERROR_PARTIAL); JSON written with "partial":true
@@ -228,7 +270,8 @@ EMSCRIPTEN_KEEPALIVE
 int pcre2_wasm_match(pcre2_code* re, const char* subject, uint32_t subject_len,
                      char* match_buf, uint32_t match_buf_size,
                      uint32_t match_limit, uint32_t depth_limit,
-                     uint32_t start_offset, uint32_t match_flags) {
+                     uint32_t start_offset, uint32_t match_flags,
+                     uint32_t after_empty) {
     if (!re || !subject) return -1;
 
     PCRE2_SIZE subj_len = (PCRE2_SIZE)subject_len;
@@ -236,8 +279,8 @@ int pcre2_wasm_match(pcre2_code* re, const char* subject, uint32_t subject_len,
     if (!md) return -48;
 
     pcre2_match_context* mctx = make_mctx(match_limit, depth_limit);
-    int rc = pcre2_match(re, (PCRE2_SPTR)subject, subj_len,
-                         (PCRE2_SIZE)start_offset, (uint32_t)match_flags, md, mctx);
+    int rc = match_next(re, subject, subj_len, (PCRE2_SIZE)start_offset,
+                        after_empty != 0, match_flags, md, mctx);
     if (mctx) pcre2_match_context_free(mctx);
     if (rc > 0 && end_before_start(md)) rc = PCRE2_ERROR_BADSUBSPATTERN;
 
@@ -261,7 +304,8 @@ int pcre2_wasm_match(pcre2_code* re, const char* subject, uint32_t subject_len,
 }
 
 /*
- * Global search — finds all non-overlapping matches. Returns:
+ * Global search — finds all non-overlapping matches, with PCRE2's handling
+ * of empty matches (see match_next). Returns:
  *   >= 0               number of matches; match_buf contains JSON array of match objects
  *   WASM_BUF_OVERFLOW  match_buf too small — retry with a larger buffer
  *   other negative     PCRE2 error (e.g. -47 matchlimit, -53 depthlimit)
@@ -289,21 +333,17 @@ int pcre2_wasm_match_all(pcre2_code* re, const char* subject, uint32_t subject_l
     NameTable nt;
     if (write_json) nt_load(re, &nt);
 
-    /* Detect UTF-8 mode once; needed to advance past zero-length matches safely. */
-    uint32_t allopts = 0;
-    pcre2_pattern_info(re, PCRE2_INFO_ALLOPTIONS, &allopts);
-    int utf_mode = (allopts & PCRE2_UTF) != 0;
-
     JsonBuf b = { match_buf, 0, match_buf_size, 0 };
     if (write_json) jb_char(&b, '[');
 
     int total = 0;
     int match_rc = 0;
     PCRE2_SIZE offset = (PCRE2_SIZE)start_offset;
+    int after_empty = 0;
 
-    while (offset <= subj_len) {
-        int rc = pcre2_match(re, (PCRE2_SPTR)subject, subj_len,
-                             offset, (uint32_t)match_flags, md, mctx);
+    for (;;) {
+        int rc = match_next(re, subject, subj_len, offset, after_empty,
+                            match_flags, md, mctx);
         if (rc == PCRE2_ERROR_NOMATCH) break;
         if (rc == PCRE2_ERROR_PARTIAL) {
             /* Partial match at end of subject — include it and stop. */
@@ -337,19 +377,8 @@ int pcre2_wasm_match_all(pcre2_code* re, const char* subject, uint32_t subject_l
         }
 
         total++;
-        if (end > start) {
-            offset = end;
-        } else {
-            offset = end + 1;
-            if (utf_mode) {
-                /* Skip UTF-8 continuation bytes (0x80–0xBF) to reach the next
-                   valid codepoint boundary. Without this, pcre2_match returns
-                   PCRE2_ERROR_BADUTFOFFSET (-36) on the following iteration. */
-                while (offset < subj_len &&
-                       ((unsigned char)subject[offset] & 0xC0) == 0x80)
-                    offset++;
-            }
-        }
+        offset = end;
+        after_empty = (end == start);
     }
 
     if (mctx) pcre2_match_context_free(mctx);

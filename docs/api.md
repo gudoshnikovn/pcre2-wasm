@@ -83,6 +83,15 @@ pcre2.matchAll('\\d+', 'a1 b22 c333');
 // ]
 ```
 
+Empty matches follow PCRE2's own global-matching rule (the same as Perl, PHP `preg_match_all`
+and `replaceAll()`): after an empty match, a non-empty match at the same position is tried
+before moving on. This differs from JS `String.prototype.matchAll`:
+
+```js
+pcre2.matchAll('|a', 'a').map((m) => m.match); // ['', 'a', '']
+[...'a'.matchAll(/|a/g)].map((m) => m[0]); // ['', '']
+```
+
 ### `matchAllIterator(pattern, subject, flags?, options?, extraFlags?): Generator<PCRE2Match>`
 
 Lazy alternative to `matchAll()` — yields one match at a time. Use when:

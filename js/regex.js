@@ -56,8 +56,19 @@ export class PCRE2Regex {
     const rc = m.ccall(
       'pcre2_wasm_match',
       'number',
-      ['number', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number'],
-      [this.#ptr, subjectPtr, subjectLen, 0, 0, matchLimit, depthLimit, startByte, matchFlags],
+      [
+        'number',
+        'number',
+        'number',
+        'number',
+        'number',
+        'number',
+        'number',
+        'number',
+        'number',
+        'number',
+      ],
+      [this.#ptr, subjectPtr, subjectLen, 0, 0, matchLimit, depthLimit, startByte, matchFlags, 0],
     );
     m._free(subjectPtr);
     throwIfMatchError(m, rc);
@@ -68,7 +79,16 @@ export class PCRE2Regex {
    * Returns the first match as an object, or null.
    * Shape: { match, index, groups, namedGroups? }
    */
-  match(subject, { matchLimit = 0, depthLimit = 0, startPos = 0, matchFlags = 0 } = {}) {
+  match(subject, opts = {}) {
+    return this.#match(subject, opts, false);
+  }
+
+  /* afterEmpty: the previous match ended at startPos and was empty (see match_next in C). */
+  #match(
+    subject,
+    { matchLimit = 0, depthLimit = 0, startPos = 0, matchFlags = 0 } = {},
+    afterEmpty,
+  ) {
     this.#assertAlive();
     const m = this.#mod;
     const { ptr: subjectPtr, len: subjectLen } = strToWasm(m, subject);
@@ -79,6 +99,7 @@ export class PCRE2Regex {
           'pcre2_wasm_match',
           'number',
           [
+            'number',
             'number',
             'number',
             'number',
@@ -99,6 +120,7 @@ export class PCRE2Regex {
             depthLimit,
             startByte,
             matchFlags,
+            afterEmpty ? 1 : 0,
           ],
         ),
       );
@@ -111,15 +133,20 @@ export class PCRE2Regex {
     }
   }
 
-  /* Lazy generator — yields one match at a time, stopping on break. */
+  /*
+   * Lazy generator — yields one match at a time, stopping on break.
+   * Yields the same matches as matchAll(); like matchAll() it stops after a partial match.
+   */
   *matchAllIterator(subject, opts = {}) {
     let startPos = opts.startPos ?? 0;
+    let afterEmpty = false;
     while (true) {
-      const m = this.match(subject, { ...opts, startPos });
+      const m = this.#match(subject, { ...opts, startPos }, afterEmpty);
       if (!m) break;
       yield m;
-      startPos = m.index + (m.match.length || 1);
-      if (startPos > subject.length) break;
+      if (m.partial) break;
+      startPos = m.index + m.match.length;
+      afterEmpty = m.match.length === 0;
     }
   }
 
