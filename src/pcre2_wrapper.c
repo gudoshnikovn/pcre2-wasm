@@ -457,7 +457,7 @@ void pcre2_wasm_free(pcre2_code* re) {
  * Returns: bytes written (> 0), WASM_BUF_OVERFLOW, or -1 on bad args.
  *
  * JSON: {"captureCount":N,"namedGroupCount":N,"hasBackreferences":bool,
- *        "minLength":N|null,"maxLookbehind":N}
+ *        "minLength":N,"maxLookbehind":N}
  */
 EMSCRIPTEN_KEEPALIVE
 int pcre2_wasm_pattern_info(pcre2_code* re, char* out_buf, uint32_t buf_size) {
@@ -484,12 +484,8 @@ int pcre2_wasm_pattern_info(pcre2_code* re, char* out_buf, uint32_t buf_size) {
     jb_lit(&b, ",\"hasBackreferences\":");
     jb_lit(&b, backref_max > 0 ? "true" : "false");
     jb_lit(&b, ",\"minLength\":");
-    /* PCRE2_UNSET (~0u) means PCRE2 could not determine a lower bound. */
-    if (min_length == (uint32_t)~0u) {
-        jb_lit(&b, "null");
-    } else {
-        jb_uint(&b, min_length);
-    }
+    /* 0 when PCRE2 did not compute a lower bound (e.g. (*NO_START_OPT)). */
+    jb_uint(&b, min_length);
     jb_lit(&b, ",\"maxLookbehind\":");
     jb_uint(&b, max_lookbehind);
     jb_char(&b, '}');

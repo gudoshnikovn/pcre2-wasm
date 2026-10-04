@@ -135,9 +135,8 @@ describe('patternInfo()', () => {
     assert.ok(pcre2.patternInfo('\\d{3}').minLength >= 3);
   });
 
-  it('minLength is null or a number (never undefined)', () => {
-    const info = pcre2.patternInfo('.+');
-    assert.ok(info.minLength === null || typeof info.minLength === 'number');
+  it('minLength is 0 when PCRE2 does not compute it', () => {
+    assert.equal(pcre2.patternInfo('(*NO_START_OPT)abc').minLength, 0);
   });
 
   it('maxLookbehind is 0 when no lookbehind in pattern', () => {
@@ -164,12 +163,12 @@ describe('patternInfo()', () => {
     assert.equal(info.namedGroupCount, 1);
   });
 
-  it('complex pattern: all fields are numbers or boolean or null', () => {
+  it('complex pattern: all fields are numbers or boolean', () => {
     const info = pcre2.patternInfo('(?P<a>\\d+)(?<=\\d{2})(\\w)\\1');
     assert.equal(typeof info.captureCount, 'number');
     assert.equal(typeof info.namedGroupCount, 'number');
     assert.equal(typeof info.hasBackreferences, 'boolean');
-    assert.ok(info.minLength === null || typeof info.minLength === 'number');
+    assert.equal(typeof info.minLength, 'number');
     assert.equal(typeof info.maxLookbehind, 'number');
   });
 

@@ -419,7 +419,7 @@ interface PCRE2PatternInfo {
   captureCount: number; // total number of capture groups
   namedGroupCount: number; // number of named capture groups
   hasBackreferences: boolean; // true if the pattern uses \1, \k<name>, etc.
-  minLength: number | null; // minimum subject length that could match, or null
+  minLength: number; // minimum subject length that could match (0 if unknown)
   maxLookbehind: number; // maximum lookbehind length (0 if none)
 }
 ```

@@ -62,10 +62,10 @@ export interface PCRE2PatternInfo {
   /** True if the pattern contains back-references (\1, \k<name>, etc.). */
   hasBackreferences: boolean;
   /**
-   * Minimum subject length that could produce a match, or null if PCRE2
-   * could not determine a lower bound.
+   * Lower bound on the length (in characters) of any matching subject.
+   * 0 when the pattern can match an empty string or PCRE2 did not compute a bound.
    */
-  minLength: number | null;
+  minLength: number;
   /** Maximum lookbehind length in the pattern (0 when there are none). */
   maxLookbehind: number;
 }
