@@ -251,9 +251,9 @@ int pcre2_wasm_match(pcre2_code* re, const char* subject, uint32_t subject_len,
 
 /*
  * Global search — finds all non-overlapping matches. Returns:
- *   >= 0  number of matches; match_buf contains JSON array of match objects
- *   -2    match_buf too small — retry with a larger buffer
- *   < -2  PCRE2 error (e.g. -47 matchlimit, -53 depthlimit)
+ *   >= 0               number of matches; match_buf contains JSON array of match objects
+ *   WASM_BUF_OVERFLOW  match_buf too small — retry with a larger buffer
+ *   other negative     PCRE2 error (e.g. -47 matchlimit, -53 depthlimit)
  *
  * match_limit / depth_limit: 0 means use PCRE2 built-in defaults (no cap).
  * Passing match_buf=0 / match_buf_size=0 is valid: counts matches without
@@ -364,10 +364,10 @@ int pcre2_wasm_match_all(pcre2_code* re, const char* subject, uint32_t subject_l
  * match_limit / depth_limit: 0 means use PCRE2 built-in defaults (no cap).
  *
  * Returns:
- *   >= 0  number of substitutions; out_buf contains the result string and
- *         *out_len_ptr its length in bytes (the result may contain NUL bytes)
- *   -2    out_buf too small — retry with a larger buffer
- *   < -2  PCRE2 error
+ *   >= 0               number of substitutions; out_buf contains the result string and
+ *                      *out_len_ptr its length in bytes (the result may contain NUL bytes)
+ *   WASM_BUF_OVERFLOW  out_buf too small — retry with a larger buffer
+ *   other negative     PCRE2 error
  */
 EMSCRIPTEN_KEEPALIVE
 int pcre2_wasm_replace(pcre2_code* re, const char* subject, uint32_t subject_len,
