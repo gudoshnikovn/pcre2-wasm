@@ -103,19 +103,32 @@ static void jb_match_object(JsonBuf* b, const char* subject,
     /* ,"namedGroups":{...} — omitted entirely when no named groups */
     if (nt->namecount > 0) {
         jb_lit(b, ",\"namedGroups\":{");
-        for (uint32_t ni = 0; ni < nt->namecount; ni++) {
+        uint32_t ni = 0;
+        while (ni < nt->namecount) {
             if (ni > 0) jb_char(b, ',');
             const unsigned char* e =
                 (const unsigned char*)((const char*)nt->table + ni * nt->entry_size);
-            uint32_t gn = ((uint32_t)e[0] << 8) | e[1];
             const char* name = (const char*)(e + 2);
 
             jb_string(b, name, (uint32_t)strlen(name));
             jb_char(b, ':');
 
-            /* gn is a valid index into ov even if >= rc: create_from_pattern
+            /* The table is sorted by name, so with DUPNAMES all groups sharing a
+               name are adjacent. Emit the name once, using the first of its
+               groups that is set (as pcre2_substring_get_byname does).
+               gn is a valid index into ov even if >= rc: create_from_pattern
                allocates enough slots and fills them with PCRE2_UNSET */
-            PCRE2_SIZE gs = ov[2*gn], ge = ov[2*gn+1];
+            PCRE2_SIZE gs = PCRE2_UNSET, ge = PCRE2_UNSET;
+            for (; ni < nt->namecount; ni++) {
+                const unsigned char* d =
+                    (const unsigned char*)((const char*)nt->table + ni * nt->entry_size);
+                if (strcmp((const char*)(d + 2), name) != 0) break;
+                uint32_t gn = ((uint32_t)d[0] << 8) | d[1];
+                if (gs == PCRE2_UNSET && ov[2*gn] != PCRE2_UNSET) {
+                    gs = ov[2*gn];
+                    ge = ov[2*gn+1];
+                }
+            }
             if (gs == PCRE2_UNSET) {
                 jb_lit(b, "null");
             } else {

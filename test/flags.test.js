@@ -78,6 +78,17 @@ describe('flags', () => {
     assert.throws(() => pcre2.compile('(?<x>a)|(?<x>b)'));
   });
 
+  it('DUPNAMES — namedGroups holds the group that actually matched', () => {
+    const p = '(?<x>a)|(?<x>b)';
+    assert.deepEqual(pcre2.match(p, 'a', FLAGS.DUPNAMES).namedGroups, { x: 'a' });
+    assert.deepEqual(pcre2.match(p, 'b', FLAGS.DUPNAMES).namedGroups, { x: 'b' });
+  });
+
+  it('DUPNAMES — other names around a duplicate are unaffected', () => {
+    const r = pcre2.match('(?<a>1)(?:(?<x>2)|(?<x>3))(?<z>4)', '134', FLAGS.DUPNAMES);
+    assert.deepEqual(r.namedGroups, { a: '1', x: '3', z: '4' });
+  });
+
   it('ALLOW_EMPTY_CLASS — [] is valid and never matches', () => {
     assert.throws(() => pcre2.compile('[]'));
     assert.doesNotThrow(() => pcre2.compile('[]', FLAGS.ALLOW_EMPTY_CLASS));
