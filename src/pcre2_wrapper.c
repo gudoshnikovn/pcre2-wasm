@@ -158,6 +158,16 @@ static pcre2_match_context* make_mctx(uint32_t match_limit, uint32_t depth_limit
     return ctx;
 }
 
+/*
+ * \K inside a lookahead (allowed by EXTRA_ALLOW_LOOKAROUND_BSK) can set the
+ * match start after its end. Such a match has no meaningful text; report it
+ * with the same error pcre2_substitute uses.
+ */
+static int end_before_start(pcre2_match_data* md) {
+    PCRE2_SIZE* ov = pcre2_get_ovector_pointer(md);
+    return ov[1] < ov[0];
+}
+
 /* ── Public API ─────────────────────────────────────────────────────────── */
 
 /*
@@ -229,6 +239,7 @@ int pcre2_wasm_match(pcre2_code* re, const char* subject, uint32_t subject_len,
     int rc = pcre2_match(re, (PCRE2_SPTR)subject, subj_len,
                          (PCRE2_SIZE)start_offset, (uint32_t)match_flags, md, mctx);
     if (mctx) pcre2_match_context_free(mctx);
+    if (rc > 0 && end_before_start(md)) rc = PCRE2_ERROR_BADSUBSPATTERN;
 
     int is_partial = (rc == PCRE2_ERROR_PARTIAL);
     if ((rc > 0 || is_partial) && match_buf && match_buf_size > 2) {
@@ -310,6 +321,7 @@ int pcre2_wasm_match_all(pcre2_code* re, const char* subject, uint32_t subject_l
             break;
         }
         if (rc < 0) { match_rc = rc; break; }  /* propagate errors (limits, etc.) */
+        if (end_before_start(md)) { match_rc = PCRE2_ERROR_BADSUBSPATTERN; break; }
 
         PCRE2_SIZE* ov = pcre2_get_ovector_pointer(md);
         PCRE2_SIZE  start = ov[0], end = ov[1];

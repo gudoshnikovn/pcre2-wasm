@@ -223,6 +223,14 @@ describe('EXTRA_FLAGS', () => {
     assert.equal(pcre2.test('cat', 'concatenate', 0, {}, EXTRA_FLAGS.MATCH_WORD), false);
   });
 
+  it('ALLOW_LOOKAROUND_BSK: \\K setting start after end throws PCRE2MatchError', () => {
+    const bsk = [0, {}, EXTRA_FLAGS.ALLOW_LOOKAROUND_BSK];
+    const BADSUBSPATTERN = { name: 'PCRE2MatchError', code: -60 };
+    assert.throws(() => pcre2.match('(?=ab\\K)', 'ab', ...bsk), BADSUBSPATTERN);
+    assert.throws(() => pcre2.matchAll('(?=ab\\K)', 'ab', ...bsk), BADSUBSPATTERN);
+    assert.throws(() => pcre2.count('(?=ab\\K)', 'ab', ...bsk), BADSUBSPATTERN);
+  });
+
   it('MATCH_WORD: pattern matches a standalone word', () => {
     assert.equal(pcre2.test('cat', 'the cat sat', 0, {}, EXTRA_FLAGS.MATCH_WORD), true);
   });
