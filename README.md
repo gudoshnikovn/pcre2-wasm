@@ -9,6 +9,9 @@ Works in browser and Node.js — WASM binary is bundled inline, no extra files t
 npm install pcre2-wasm
 ```
 
+Requires Node.js ≥ 18.3 or a browser with WebAssembly support: Chrome ≥ 85, Firefox ≥ 79,
+Safari ≥ 15 (the minimums of the Emscripten version the module is built with).
+
 ## Quick start
 
 ```js
@@ -197,7 +200,7 @@ See [docs/api.md](docs/api.md) for the full API reference.
 
 ## Building from source
 
-Requires [Emscripten](https://emscripten.org/).
+Requires [Emscripten](https://emscripten.org/) 6.0.11 — `make` installs it into `emsdk/`.
 
 ```bash
 git clone https://github.com/gudoshnikovn/pcre2-wasm.git

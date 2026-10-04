@@ -2,7 +2,7 @@ SHELL := /bin/bash
 
 PCRE2_VERSION := 10.49
 # Keep in sync with .github/workflows/publish.yml
-EMSDK_VERSION := 5.0.7
+EMSDK_VERSION := 6.0.11
 
 EMSDK_DIR   := emsdk
 PCRE2_DIR   := pcre2

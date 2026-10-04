@@ -32,7 +32,7 @@ The WASM binary is base64-inlined into `dist/pcre2.js` (`SINGLE_FILE=1`), so the
 
 - CMake ≥ 3.14
 - GNU Make
-- Emscripten SDK — installed automatically by `make setup`
+- Emscripten SDK 6.0.11 (`EMSDK_VERSION` in the Makefile) — installed automatically by `make setup`
 
 ### Steps
 
