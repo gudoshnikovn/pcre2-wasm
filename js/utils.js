@@ -36,6 +36,11 @@ export function byteOffsetToCharOffset(str, byteOffset) {
 /* Convert a JS character offset to a UTF-8 byte offset (needed for startPos). */
 export function charOffsetToByteOffset(str, charOffset) {
   if (charOffset <= 0) return 0;
+  /* An offset between the halves of a surrogate pair would point into the middle
+     of a UTF-8 sequence; move it past the pair. */
+  const hi = str.charCodeAt(charOffset - 1);
+  const lo = str.charCodeAt(charOffset);
+  if (hi >= 0xd800 && hi <= 0xdbff && lo >= 0xdc00 && lo <= 0xdfff) charOffset++;
   return _encoder.encode(str.slice(0, charOffset)).length;
 }
 

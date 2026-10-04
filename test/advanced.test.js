@@ -70,6 +70,21 @@ describe('startPos option', () => {
     const r = pcre2.replace('\\d+', 'cost: 100 or 200', 'X', 0, { startPos: 13 });
     assert.equal(r, 'cost: 100 or X');
   });
+
+  it('startPos inside a surrogate pair moves past the pair (UTF mode)', () => {
+    const r = pcre2.match('a', '😀a', FLAGS.UTF, { startPos: 1 });
+    assert.equal(r.index, 2);
+  });
+
+  it('matchAllIterator steps over astral characters after empty matches', () => {
+    const re = pcre2.compile('', FLAGS.UTF);
+    const indexes = [...re.matchAllIterator('😀a')].map((m) => m.index);
+    re.destroy();
+    assert.deepEqual(
+      indexes,
+      pcre2.matchAll('', '😀a', FLAGS.UTF).map((m) => m.index),
+    );
+  });
 });
 
 /* ── split() ────────────────────────────────────────────────────────────── */
