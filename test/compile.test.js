@@ -197,6 +197,22 @@ describe('FinalizationRegistry (destroy safety)', () => {
     re.destroy();
     assert.doesNotThrow(() => re.destroy());
   });
+
+  it('every method throws after destroy() instead of silently returning', () => {
+    const re = pcre2.compile('a');
+    re.destroy();
+    const destroyed = /destroyed/;
+    assert.throws(() => re.test('a'), destroyed);
+    assert.throws(() => re.match('a'), destroyed);
+    assert.throws(() => re.matchAll('a'), destroyed);
+    assert.throws(() => [...re.matchAllIterator('a')], destroyed);
+    assert.throws(() => re.count('a'), destroyed);
+    assert.throws(() => re.search('a'), destroyed);
+    assert.throws(() => re.split('a'), destroyed);
+    assert.throws(() => re.replace('aaa', 'b'), destroyed);
+    assert.throws(() => re.replaceAll('aaa', 'b'), destroyed);
+    assert.throws(() => re.patternInfo(), destroyed);
+  });
 });
 
 /* ── PCRE2CompileError ───────────────────────────────────────────────────── */

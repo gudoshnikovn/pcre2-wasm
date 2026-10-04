@@ -37,12 +37,17 @@ export class PCRE2Regex {
     _registry.register(this, { mod, ptr }, this);
   }
 
+  #assertAlive() {
+    if (!this.#ptr) throw new Error('PCRE2Regex has been destroyed');
+  }
+
   get pattern() {
     return this.#pattern;
   }
 
   /* Returns true if the pattern matches anywhere in subject. */
   test(subject, { matchLimit = 0, depthLimit = 0, startPos = 0, matchFlags = 0 } = {}) {
+    this.#assertAlive();
     const m = this.#mod;
     const { ptr: subjectPtr, len: subjectLen } = strToWasm(m, subject);
     const startByte = charOffsetToByteOffset(subject, startPos);
@@ -62,6 +67,7 @@ export class PCRE2Regex {
    * Shape: { match, index, groups, namedGroups? }
    */
   match(subject, { matchLimit = 0, depthLimit = 0, startPos = 0, matchFlags = 0 } = {}) {
+    this.#assertAlive();
     const m = this.#mod;
     const { ptr: subjectPtr, len: subjectLen } = strToWasm(m, subject);
     const startByte = charOffsetToByteOffset(subject, startPos);
@@ -117,6 +123,7 @@ export class PCRE2Regex {
 
   /* Returns all non-overlapping matches as an array of match objects. */
   matchAll(subject, { matchLimit = 0, depthLimit = 0, startPos = 0, matchFlags = 0 } = {}) {
+    this.#assertAlive();
     const m = this.#mod;
     const { ptr: subjectPtr, len: subjectLen } = strToWasm(m, subject);
     const startByte = charOffsetToByteOffset(subject, startPos);
@@ -160,6 +167,7 @@ export class PCRE2Regex {
 
   /* Returns the number of non-overlapping matches without allocating results. */
   count(subject, { matchLimit = 0, depthLimit = 0, startPos = 0, matchFlags = 0 } = {}) {
+    this.#assertAlive();
     const m = this.#mod;
     const { ptr: subjectPtr, len: subjectLen } = strToWasm(m, subject);
     const startByte = charOffsetToByteOffset(subject, startPos);
@@ -228,6 +236,7 @@ export class PCRE2Regex {
     global,
     { matchLimit = 0, depthLimit = 0, startPos = 0, matchFlags = 0, replaceFlags = 0 } = {},
   ) {
+    this.#assertAlive();
     const m = this.#mod;
     /* PCRE2 uses $0 for the whole match; JS uses $&. Normalise before passing to C. */
     const repl = replacement.replace(/\$&/g, '$0');
@@ -294,6 +303,7 @@ export class PCRE2Regex {
    * { captureCount, namedGroupCount, hasBackreferences, minLength, maxLookbehind }
    */
   patternInfo() {
+    this.#assertAlive();
     const m = this.#mod;
     const bufSize = 256;
     const buf = m._malloc(bufSize);
