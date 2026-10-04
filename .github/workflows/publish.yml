@@ -13,6 +13,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Read Emscripten version
+        id: emsdk
+        run: echo "version=$(grep -E '^EMSDK_VERSION :=' Makefile | awk '{print $3}')" >> $GITHUB_OUTPUT
+
+      # make skips installing Emscripten when emsdk/.installed-<version> is present.
+      - name: Cache Emscripten SDK
+        uses: actions/cache@v4
+        with:
+          path: |
+            emsdk
+            !emsdk/downloads
+          key: emsdk-${{ runner.os }}-${{ steps.emsdk.outputs.version }}
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:

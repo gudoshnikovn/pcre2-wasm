@@ -68,7 +68,8 @@ ship in a patch release. Read the first section before upgrading.
 ### Build
 
 - Emscripten is pinned (6.0.11) in the Makefile instead of `latest`; CI builds with the same
-  Makefile-installed toolchain (the separate `setup-emsdk` step was removed).
+  Makefile-installed toolchain (the separate `setup-emsdk` step was removed) and caches it per
+  Emscripten version.
 - `make` reinstalls Emscripten or re-clones PCRE2 when `EMSDK_VERSION` / `PCRE2_VERSION`
   changes, and relinks when the Makefile changes.
 - Removed the unused `js/pcre2Service.js`.
