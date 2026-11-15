@@ -1,6 +1,19 @@
 # Changelog
 
-## Unreleased
+## 10.49.3
+
+Bug fixes and more PCRE2 options. Two fixes change results, so check **Behaviour changes**
+before upgrading: `groups` now always has an entry for every capture group, and lone
+surrogates become U+FFFD.
+
+### Behaviour changes
+
+- `groups` has an entry for every capture group. Unset groups after the last one that matched
+  were left out, so `matchAll('(a)|(b)', 'a')` gave `groups: ['a']` instead of `['a', null]`
+  and `split()` differed from JS. On a partial match `groups` is all `null` (was `[]`).
+- Lone surrogates (e.g. `'\uD800'`) in a pattern, subject or replacement become one U+FFFD, as
+  with `TextEncoder` and `String.prototype.toWellFormed()`. Before, they were encoded as invalid
+  UTF-8: `replace()` turned each one into three U+FFFD and `FLAGS.UTF` threw a UTF-8 error.
 
 ### Features
 
@@ -18,9 +31,6 @@
 
 ### Bug fixes
 
-- Lone surrogates (e.g. `'\uD800'`) in a pattern, subject or replacement become one U+FFFD, as
-  with `TextEncoder` and `String.prototype.toWellFormed()`. Before, they were encoded as invalid
-  UTF-8: `replace()` turned each one into three U+FFFD and `FLAGS.UTF` threw a UTF-8 error.
 - `matchAll()`, `count()` and `matchAllIterator()` no longer loop forever when `\K` in a
   lookbehind (with `EXTRA_FLAGS.ALLOW_LOOKAROUND_BSK`) gives a match that ends where the search
   started: `matchAll('(?<=\\Ka)', 'aaa')` failed with `result too large` and the iterator never
@@ -29,12 +39,13 @@
 - On a partial match, `namedGroups` entries are `null`. Before, `matchAll()` showed values left
   from the previous match and `match()` read uninitialised memory, often failing with
   `result too large`.
-- `groups` has an entry for every capture group. Unset groups after the last one that matched
-  were left out, so `matchAll('(a)|(b)', 'a')` gave `groups: ['a']` instead of `['a', null]`
-  and `split()` differed from JS. On a partial match `groups` is all `null` (was `[]`).
 - With `FLAGS.UTF`, `matchAll()`, `count()`, `split()` and `matchAllIterator()` no longer take
   quadratic time: the subject's UTF-8 was re-checked before every match, so 200 000 matches took
   about 13 s instead of 15 ms. It is now checked once, as `pcre2_substitute` does.
+
+### Documentation
+
+- README: lone surrogates added to "Differences from JavaScript RegExp".
 
 ## 10.49.2
 
