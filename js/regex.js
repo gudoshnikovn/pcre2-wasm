@@ -103,7 +103,7 @@ export class PCRE2Regex {
     const { ptr: subjectPtr, len: subjectLen } = strToWasm(m, subject);
     try {
       const startByte = charOffsetToByteOffset(subject, opts.startPos ?? 0);
-      const result = this.#matchBytes(subjectPtr, subjectLen, startByte, opts, false, 0);
+      const result = this.#matchBytes(subjectPtr, subjectLen, startByte, opts, 0, 0);
       if (result) result.index = byteOffsetToCharOffset(subject, result.index);
       return result;
     } finally {
@@ -113,17 +113,17 @@ export class PCRE2Regex {
 
   /*
    * Runs pcre2_wasm_match on a subject already in WASM memory. Returns the parsed
-   * match with index as a byte offset, or null. afterEmpty: the previous match
-   * ended at startByte and was empty (see match_next in C). endPtr, if not 0,
-   * receives the byte offset where the match ends.
+   * match with index as a byte offset, or null. nextOptions are ORed into
+   * matchFlags. nextPtr, if not 0, receives pcre2_next_match()'s verdict on the
+   * next search as three u32: continue (0/1), start offset, nextOptions.
    */
   #matchBytes(
     subjectPtr,
     subjectLen,
     startByte,
     { matchLimit = 0, depthLimit = 0, matchFlags = 0 },
-    afterEmpty,
-    endPtr,
+    nextOptions,
+    nextPtr,
   ) {
     this.#assertAlive();
     const m = this.#mod;
@@ -154,8 +154,8 @@ export class PCRE2Regex {
           depthLimit,
           startByte,
           matchFlags,
-          afterEmpty ? 1 : 0,
-          endPtr,
+          nextOptions,
+          nextPtr,
         ],
       ),
     );
@@ -181,25 +181,25 @@ export class PCRE2Regex {
   *#iterate(subject, opts, held) {
     const m = this.#mod;
     const { ptr: subjectPtr, len: subjectLen } = strToWasm(m, subject);
-    const endPtr = m._malloc(4);
-    held.ptrs = [subjectPtr, endPtr];
+    const nextPtr = m._malloc(12);
+    held.ptrs = [subjectPtr, nextPtr];
     try {
       const toCharOffset = byteToCharOffsetConverter(subject);
       let startByte = charOffsetToByteOffset(subject, opts.startPos ?? 0);
-      let afterEmpty = false;
+      let nextOptions = 0;
       while (true) {
-        const r = this.#matchBytes(subjectPtr, subjectLen, startByte, opts, afterEmpty, endPtr);
+        const r = this.#matchBytes(subjectPtr, subjectLen, startByte, opts, nextOptions, nextPtr);
         if (!r) break;
-        const endByte = m.getValue(endPtr, 'i32') >>> 0;
-        afterEmpty = endByte === r.index;
-        startByte = endByte;
+        const more = m.getValue(nextPtr, 'i32') !== 0;
+        startByte = m.getValue(nextPtr + 4, 'i32') >>> 0;
+        nextOptions = m.getValue(nextPtr + 8, 'i32') >>> 0;
         r.index = toCharOffset(r.index);
         yield r;
-        if (r.partial) break;
+        if (!more) break;
       }
     } finally {
       m._free(subjectPtr);
-      m._free(endPtr);
+      m._free(nextPtr);
       held.ptrs = [];
     }
   }

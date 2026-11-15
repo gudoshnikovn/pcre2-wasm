@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Bug fixes
+
+- `matchAll()`, `count()` and `matchAllIterator()` no longer loop forever when `\K` in a
+  lookbehind (with `EXTRA_FLAGS.ALLOW_LOOKAROUND_BSK`) gives a match that ends where the search
+  started: `matchAll('(?<=\\Ka)', 'aaa')` failed with `result too large` and the iterator never
+  ended. Global matching now uses PCRE2's own `pcre2_next_match()` instead of a hand-written
+  copy of its rule (thanks to @nllyy, #1).
+
 ## 10.49.2
 
 Documentation-only release: the code is identical to 10.49.1. It ships the corrected README,

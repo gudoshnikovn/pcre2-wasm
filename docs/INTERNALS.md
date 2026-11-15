@@ -104,7 +104,7 @@ Both `pcre2_wasm_match` and `pcre2_wasm_match_all` write into a buffer pre-alloc
 
 ### Empty matches in global matching
 
-`match_next` implements PCRE2's global-matching rule (as in `pcre2demo` and `pcre2_substitute`), shared by `pcre2_wasm_match_all` and — via its `after_empty` argument — by `pcre2_wasm_match` for `matchAllIterator`, which keeps the subject in WASM memory for the whole iteration and steps by the byte offset `pcre2_wasm_match` returns through `end_out`. After an empty match, it first retries at the same offset with `PCRE2_NOTEMPTY_ATSTART | PCRE2_ANCHORED`. Only if that fails does it advance: by two bytes over CRLF when CRLF is a newline, otherwise by one byte, skipping UTF-8 continuation bytes (`0x80–0xBF`) in UTF mode — a mid-codepoint offset would make `pcre2_match` return `PCRE2_ERROR_BADUTFOFFSET`.
+`pcre2_wasm_match_all` steps through matches with PCRE2's own `pcre2_next_match()` (as `pcre2demo` and `pcre2_substitute` do): after each match it gives the start offset and options for the next search — `PCRE2_NOTEMPTY_ATSTART` at the same offset after an empty match, and a bump-along by one character (a whole code point in UTF mode, both bytes of CRLF when CRLF is a newline) after a non-empty match that did not move past the start offset, which `\K` in a lookbehind can produce. `pcre2_wasm_match` serves `matchAllIterator`, which keeps the subject in WASM memory for the whole iteration: it takes those options as `next_options` and writes `pcre2_next_match()`'s result to `next_out` (continue flag, next start offset, next options), so the iterator finds the same matches as `matchAll`.
 
 ---
 

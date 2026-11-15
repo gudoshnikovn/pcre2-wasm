@@ -469,4 +469,34 @@ describe('matchAll() character offsets with \\K', () => {
       ],
     );
   });
+
+  /* From offset 1 the match [0,1] ends where the search started, so the next search
+     must bump along (pcre2_next_match) instead of finding it forever. The duplicate
+     [0,1] is PCRE2's documented behaviour with ALLOW_LOOKAROUND_BSK (pcre2api,
+     "Iterating over all matches"). */
+  const nonProgressing = [
+    [0, 'a'],
+    [0, 'a'],
+    [1, 'a'],
+    [2, 'a'],
+  ];
+  const bskRe = () => pcre2.compile('(?<=\\Ka)', 0, EXTRA_FLAGS.ALLOW_LOOKAROUND_BSK);
+
+  it('matchAll() advances past a non-empty match that ends at the start offset', () => {
+    assert.deepEqual(
+      bskRe()
+        .matchAll('aaa')
+        .map((m) => [m.index, m.match]),
+      nonProgressing,
+    );
+  });
+
+  it('matchAllIterator() advances past a non-empty match that ends at the start offset', () => {
+    const out = [];
+    for (const m of bskRe().matchAllIterator('aaa')) {
+      out.push([m.index, m.match]);
+      if (out.length > 10) break;
+    }
+    assert.deepEqual(out, nonProgressing);
+  });
 });
