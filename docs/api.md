@@ -438,24 +438,30 @@ pcre2.patternInfo('(?P<year>\\d{4})-(\\w)\\1');
 
 Compile-time flags. Pass as the `flags` argument to any method or to `parseFlags()`.
 
-| Constant                   | Description                                                    |
-| -------------------------- | -------------------------------------------------------------- |
-| `FLAGS.CASELESS`           | Case-insensitive matching (`(?i)`)                             |
-| `FLAGS.MULTILINE`          | `^`/`$` match at line boundaries (`(?m)`)                      |
-| `FLAGS.DOTALL`             | `.` matches any character including newline (`(?s)`)           |
-| `FLAGS.EXTENDED`           | Ignore unescaped whitespace in pattern (`(?x)`)                |
-| `FLAGS.UTF`                | Treat pattern and subject as UTF-8                             |
-| `FLAGS.UCP`                | Unicode properties for `\d`, `\w`, `\s`, `\b`; enables UTF     |
-| `FLAGS.ANCHORED`           | Match only at the start of the subject                         |
-| `FLAGS.ENDANCHORED`        | Match only at the end of the subject                           |
-| `FLAGS.UNGREEDY`           | Invert greediness of all quantifiers (`(?U)`)                  |
-| `FLAGS.NO_AUTO_CAPTURE`    | Plain `()` do not capture; use `(?:)` or named groups (`(?n)`) |
-| `FLAGS.DUPNAMES`           | Allow duplicate named groups                                   |
-| `FLAGS.DOLLAR_ENDONLY`     | `$` matches only at the absolute end of the string             |
-| `FLAGS.ALLOW_EMPTY_CLASS`  | Allow `[]` as an empty character class that never matches      |
-| `FLAGS.ALT_BSUX`           | JavaScript-style `\uHHHH` and `\xHH` escapes; disables `\x{…}` |
-| `FLAGS.LITERAL`            | Treat the entire pattern as a literal string                   |
-| `FLAGS.ALT_EXTENDED_CLASS` | Enable extended character class syntax `[[ ]]`                 |
+| Constant                    | Description                                                              |
+| --------------------------- | ------------------------------------------------------------------------ |
+| `FLAGS.CASELESS`            | Case-insensitive matching (`(?i)`)                                       |
+| `FLAGS.MULTILINE`           | `^`/`$` match at line boundaries (`(?m)`)                                |
+| `FLAGS.DOTALL`              | `.` matches any character including newline (`(?s)`)                     |
+| `FLAGS.EXTENDED`            | Ignore unescaped whitespace in pattern (`(?x)`)                          |
+| `FLAGS.UTF`                 | Treat pattern and subject as UTF-8                                       |
+| `FLAGS.UCP`                 | Unicode properties for `\d`, `\w`, `\s`, `\b`; enables UTF               |
+| `FLAGS.ANCHORED`            | Match only at the start of the subject                                   |
+| `FLAGS.ENDANCHORED`         | Match only at the end of the subject                                     |
+| `FLAGS.UNGREEDY`            | Invert greediness of all quantifiers (`(?U)`)                            |
+| `FLAGS.NO_AUTO_CAPTURE`     | Plain `()` do not capture; use `(?:)` or named groups (`(?n)`)           |
+| `FLAGS.DUPNAMES`            | Allow duplicate named groups                                             |
+| `FLAGS.DOLLAR_ENDONLY`      | `$` matches only at the absolute end of the string                       |
+| `FLAGS.ALLOW_EMPTY_CLASS`   | Allow `[]` as an empty character class that never matches                |
+| `FLAGS.ALT_BSUX`            | JavaScript-style `\uHHHH` and `\xHH` escapes; disables `\x{…}`           |
+| `FLAGS.LITERAL`             | Treat the entire pattern as a literal string                             |
+| `FLAGS.ALT_EXTENDED_CLASS`  | Enable extended character class syntax `[[ ]]`                           |
+| `FLAGS.FIRSTLINE`           | The match must start before or at the first newline                      |
+| `FLAGS.MATCH_UNSET_BACKREF` | A backreference to an unset group matches `""`, as in JavaScript         |
+| `FLAGS.NEVER_UTF`           | Forbid `(*UTF)` in the pattern (for untrusted patterns)                  |
+| `FLAGS.NEVER_UCP`           | Forbid `(*UCP)` in the pattern (for untrusted patterns)                  |
+| `FLAGS.NEVER_BACKSLASH_C`   | Forbid `\C` (a single code unit) in the pattern                          |
+| `FLAGS.MATCH_INVALID_UTF`   | The subject may contain invalid UTF-8, e.g. lone surrogates; implies UTF |
 
 > **Non-ASCII text needs `FLAGS.UTF`.** Strings are passed to PCRE2 as UTF-8, but without
 > `FLAGS.UTF` (or `FLAGS.UCP`, which implies it) PCRE2 treats every byte as a separate character.
@@ -467,14 +473,16 @@ Compile-time flags. Pass as the `flags` argument to any method or to `parseFlags
 
 Match-time flags. Pass as `options.matchFlags`.
 
-| Constant                       | Description                                                   |
-| ------------------------------ | ------------------------------------------------------------- |
-| `MATCH_FLAGS.NOTBOL`           | `^` does not match at the start of the subject                |
-| `MATCH_FLAGS.NOTEOL`           | `$` does not match at the end of the subject                  |
-| `MATCH_FLAGS.NOTEMPTY`         | An empty string is not a valid match                          |
-| `MATCH_FLAGS.NOTEMPTY_ATSTART` | An empty string at the start of the subject is not valid      |
-| `MATCH_FLAGS.PARTIAL_SOFT`     | Return a partial match if no full match; prefer full match    |
-| `MATCH_FLAGS.PARTIAL_HARD`     | Return a partial match if no full match; prefer partial match |
+| Constant                       | Description                                                                                |
+| ------------------------------ | ------------------------------------------------------------------------------------------ |
+| `MATCH_FLAGS.NOTBOL`           | `^` does not match at the start of the subject                                             |
+| `MATCH_FLAGS.NOTEOL`           | `$` does not match at the end of the subject                                               |
+| `MATCH_FLAGS.NOTEMPTY`         | An empty string is not a valid match                                                       |
+| `MATCH_FLAGS.NOTEMPTY_ATSTART` | An empty string at the start of the subject is not valid                                   |
+| `MATCH_FLAGS.PARTIAL_SOFT`     | Return a partial match if no full match; prefer full match                                 |
+| `MATCH_FLAGS.PARTIAL_HARD`     | Return a partial match if no full match; prefer partial match                              |
+| `MATCH_FLAGS.ANCHORED`         | Match only at `startPos`, like the JS `y` flag; `matchAll()` returns only adjacent matches |
+| `MATCH_FLAGS.ENDANCHORED`      | The match must end at the end of the subject                                               |
 
 **Partial matching** — when `PARTIAL_SOFT` or `PARTIAL_HARD` is set and only part of the subject
 matches, the result has `partial: true`. Useful for validating input as the user types.
@@ -483,23 +491,28 @@ matches, the result has `partial: true`. Useful for validating input as the user
 
 Flags for `replace()` / `replaceAll()`. Pass as `options.replaceFlags`.
 
-| Constant                      | Description                                                  |
-| ----------------------------- | ------------------------------------------------------------ |
-| `REPLACE_FLAGS.UNSET_EMPTY`   | Unmatched optional groups produce `""` — already the default |
-| `REPLACE_FLAGS.UNKNOWN_UNSET` | Unknown group name references in replacement produce `""`    |
-| `REPLACE_FLAGS.LITERAL`       | Replacement string is plain text; no `$`-substitution        |
+| Constant                         | Description                                                                 |
+| -------------------------------- | --------------------------------------------------------------------------- |
+| `REPLACE_FLAGS.UNSET_EMPTY`      | Unmatched optional groups produce `""` — already the default                |
+| `REPLACE_FLAGS.UNKNOWN_UNSET`    | Unknown group name references in replacement produce `""`                   |
+| `REPLACE_FLAGS.LITERAL`          | Replacement string is plain text; no `$`-substitution                       |
+| `REPLACE_FLAGS.REPLACEMENT_ONLY` | Return only the replacements, concatenated, without the rest of the subject |
 
 ### `EXTRA_FLAGS`
 
 Extra compile-time flags. Pass as the `extraFlags` argument to any method.
 
-| Constant                           | Description                                            |
-| ---------------------------------- | ------------------------------------------------------ |
-| `EXTRA_FLAGS.MATCH_WORD`           | Pattern is implicitly wrapped in `\b…\b` (whole-word)  |
-| `EXTRA_FLAGS.MATCH_LINE`           | Pattern is implicitly anchored to `^…$` (whole-line)   |
-| `EXTRA_FLAGS.ALLOW_LOOKAROUND_BSK` | Allow `\K` inside lookaround assertions                |
-| `EXTRA_FLAGS.CASELESS_RESTRICT`    | ASCII-only case folding even when UCP is on            |
-| `EXTRA_FLAGS.ASCII_BSD`            | `\d` matches only ASCII digits `[0-9]`                 |
-| `EXTRA_FLAGS.ASCII_BSS`            | `\s` matches only ASCII whitespace                     |
-| `EXTRA_FLAGS.ASCII_BSW`            | `\w` matches only ASCII word characters `[A-Za-z0-9_]` |
-| `EXTRA_FLAGS.TURKISH_CASING`       | Turkish/Azerbaijani I/İ casing rules under `(?i)`      |
+| Constant                            | Description                                                                     |
+| ----------------------------------- | ------------------------------------------------------------------------------- |
+| `EXTRA_FLAGS.MATCH_WORD`            | Pattern is implicitly wrapped in `\b…\b` (whole-word)                           |
+| `EXTRA_FLAGS.MATCH_LINE`            | Pattern is implicitly anchored to `^…$` (whole-line)                            |
+| `EXTRA_FLAGS.ALLOW_LOOKAROUND_BSK`  | Allow `\K` inside lookaround assertions                                         |
+| `EXTRA_FLAGS.CASELESS_RESTRICT`     | ASCII-only case folding even when UCP is on                                     |
+| `EXTRA_FLAGS.ASCII_BSD`             | `\d` matches only ASCII digits `[0-9]`                                          |
+| `EXTRA_FLAGS.ASCII_BSS`             | `\s` matches only ASCII whitespace                                              |
+| `EXTRA_FLAGS.ASCII_BSW`             | `\w` matches only ASCII word characters `[A-Za-z0-9_]`                          |
+| `EXTRA_FLAGS.TURKISH_CASING`        | Turkish/Azerbaijani I/İ casing rules under `(?i)`                               |
+| `EXTRA_FLAGS.ALT_BSUX`              | `FLAGS.ALT_BSUX` plus ECMAScript 6 `\u{hhh…}` escapes                           |
+| `EXTRA_FLAGS.BAD_ESCAPE_IS_LITERAL` | Unknown or malformed escapes such as `\j` are literal characters; use with care |
+| `EXTRA_FLAGS.ASCII_POSIX`           | POSIX classes such as `[[:alpha:]]` match only ASCII, even when UCP is on       |
+| `EXTRA_FLAGS.ASCII_DIGIT`           | `[[:digit:]]` and `[[:xdigit:]]` match only ASCII, even when UCP is on          |

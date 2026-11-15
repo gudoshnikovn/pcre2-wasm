@@ -95,6 +95,10 @@ export declare const MATCH_FLAGS: {
    * The result has partial: true.
    */
   readonly PARTIAL_HARD: 0x00000020;
+  /** Match only at startPos (like the JS y flag); in matchAll() matches must be adjacent. */
+  readonly ANCHORED: 0x80000000;
+  /** The match must end at the end of the subject. */
+  readonly ENDANCHORED: 0x20000000;
 };
 
 /**
@@ -126,6 +130,18 @@ export declare const FLAGS: {
   readonly LITERAL: 0x02000000;
   /** Enable extended character class syntax [[ ]]. */
   readonly ALT_EXTENDED_CLASS: 0x08000000;
+  /** The match must start before or at the first newline after startPos. */
+  readonly FIRSTLINE: 0x00000100;
+  /** A backreference to an unset group matches an empty string, as in JavaScript. */
+  readonly MATCH_UNSET_BACKREF: 0x00000200;
+  /** Forbid (*UCP) in the pattern — useful for untrusted patterns. */
+  readonly NEVER_UCP: 0x00000800;
+  /** Forbid (*UTF) in the pattern — useful for untrusted patterns. */
+  readonly NEVER_UTF: 0x00001000;
+  /** Forbid \\C (match a single code unit) in the pattern. */
+  readonly NEVER_BACKSLASH_C: 0x00100000;
+  /** The subject may contain invalid UTF-8 (e.g. lone surrogates); implies UTF. */
+  readonly MATCH_INVALID_UTF: 0x04000000;
 };
 
 /**
@@ -139,6 +155,8 @@ export declare const REPLACE_FLAGS: {
   readonly UNKNOWN_UNSET: 0x00000800;
   /** Replacement string is treated as plain text; no $-substitution. */
   readonly LITERAL: 0x00008000;
+  /** Return only the replacement strings (concatenated), not the rest of the subject. */
+  readonly REPLACEMENT_ONLY: 0x00020000;
 };
 
 /**
@@ -162,6 +180,14 @@ export declare const EXTRA_FLAGS: {
   readonly ASCII_BSW: 0x00000400;
   /** Apply Turkish/Azerbaijani I/İ casing rules under (?i). */
   readonly TURKISH_CASING: 0x00010000;
+  /** Unknown or malformed escapes such as \\j are literal characters instead of an error. Use with care. */
+  readonly BAD_ESCAPE_IS_LITERAL: 0x00000002;
+  /** FLAGS.ALT_BSUX plus ECMAScript 6 \\u{hhh..} escapes. */
+  readonly ALT_BSUX: 0x00000020;
+  /** All POSIX classes such as [:alpha:] match only ASCII, even when UCP is on. */
+  readonly ASCII_POSIX: 0x00000800;
+  /** [:digit:] and [:xdigit:] match only ASCII digits, even when UCP is on. */
+  readonly ASCII_DIGIT: 0x00001000;
 };
 
 /**

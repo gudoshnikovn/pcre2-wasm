@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+### Features
+
+- More PCRE2 options, all with tests and a check that every constant matches `pcre2.h`:
+  - `MATCH_FLAGS.ANCHORED` (match only at `startPos`, like the JS `y` flag) and
+    `MATCH_FLAGS.ENDANCHORED`.
+  - `FLAGS.FIRSTLINE`, `FLAGS.MATCH_UNSET_BACKREF` (JS-style backreferences to unset groups),
+    `FLAGS.NEVER_UTF`, `FLAGS.NEVER_UCP` and `FLAGS.NEVER_BACKSLASH_C` (for untrusted patterns),
+    `FLAGS.MATCH_INVALID_UTF` (search subjects with lone surrogates in UTF mode).
+  - `EXTRA_FLAGS.ALT_BSUX` (ECMAScript 6 `\u{…}`), `EXTRA_FLAGS.BAD_ESCAPE_IS_LITERAL`,
+    `EXTRA_FLAGS.ASCII_POSIX` and `EXTRA_FLAGS.ASCII_DIGIT`.
+  - `REPLACE_FLAGS.REPLACEMENT_ONLY` (return only the replacements).
+
 ### Bug fixes
 
 - `matchAll()`, `count()` and `matchAllIterator()` no longer loop forever when `\K` in a
