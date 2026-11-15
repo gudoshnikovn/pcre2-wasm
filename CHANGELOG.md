@@ -15,6 +15,9 @@
 - `groups` has an entry for every capture group. Unset groups after the last one that matched
   were left out, so `matchAll('(a)|(b)', 'a')` gave `groups: ['a']` instead of `['a', null]`
   and `split()` differed from JS. On a partial match `groups` is all `null` (was `[]`).
+- With `FLAGS.UTF`, `matchAll()`, `count()`, `split()` and `matchAllIterator()` no longer take
+  quadratic time: the subject's UTF-8 was re-checked before every match, so 200 000 matches took
+  about 13 s instead of 15 ms. It is now checked once, as `pcre2_substitute` does.
 
 ## 10.49.2
 

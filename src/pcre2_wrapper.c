@@ -218,7 +218,8 @@ int pcre2_wasm_error_message(int errcode, char* buf, uint32_t bufsize) {
  * First match at or after start_offset. next_options are ORed into
  * match_flags. If next_out is not NULL it receives what pcre2_next_match()
  * says about the next search: next_out[0] = 1 to continue (0 to stop),
- * next_out[1] = its start offset, next_out[2] = its next_options. Used by
+ * next_out[1] = its start offset, next_out[2] = its next_options (with
+ * PCRE2_NO_UTF_CHECK, since this call already checked the subject). Used by
  * matchAllIterator to step through matches exactly like matchAll. Returns:
  *   > 0                match found; match_buf contains JSON object
  *   -1                 no match (PCRE2_ERROR_NOMATCH)
@@ -253,7 +254,8 @@ int pcre2_wasm_match(pcre2_code* re, const char* subject, uint32_t subject_len,
         uint32_t options = 0;
         next_out[0] = rc > 0 && pcre2_next_match(md, &next_offset, &options);
         next_out[1] = (uint32_t)next_offset;
-        next_out[2] = options;
+        /* The subject's UTF was checked by this call (as in pcre2_substitute). */
+        next_out[2] = options | PCRE2_NO_UTF_CHECK;
     }
 
     int is_partial = (rc == PCRE2_ERROR_PARTIAL);
@@ -349,6 +351,9 @@ int pcre2_wasm_match_all(pcre2_code* re, const char* subject, uint32_t subject_l
 
         total++;
         if (!pcre2_next_match(md, &offset, &next_options)) break;
+        /* The subject's UTF is checked once, by the first call; checking it again
+           for every match would make global matching quadratic. */
+        next_options |= PCRE2_NO_UTF_CHECK;
     }
 
     if (mctx) pcre2_match_context_free(mctx);

@@ -200,6 +200,17 @@ describe('large inputs', () => {
     assert.equal(r.length, 1_000);
   });
 
+  /* The subject's UTF-8 is checked once, not before every match (~3 s when it was). */
+  it('many matches in UTF mode run in linear time', () => {
+    const re = pcre2.compile('a', FLAGS.UTF);
+    const subject = 'a'.repeat(100_000);
+    const t = performance.now();
+    assert.equal(re.count(subject), 100_000);
+    assert.equal(re.matchAll(subject).length, 100_000);
+    assert.equal([...re.matchAllIterator(subject)].length, 100_000);
+    assert.ok(performance.now() - t < 1500, `took ${performance.now() - t} ms`);
+  });
+
   it('replaceAll result far larger than the initial buffer', () => {
     const out = pcre2.replaceAll('a', 'a'.repeat(1_000), 'é'.repeat(1_000));
     assert.equal(out, 'é'.repeat(1_000_000));
