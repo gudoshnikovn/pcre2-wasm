@@ -89,11 +89,9 @@ describe('FLAGS', () => {
     assert.throws(() => pcre2.compile('a\\C', FLAGS.NEVER_BACKSLASH_C), PCRE2CompileError);
   });
 
-  it('MATCH_INVALID_UTF: a subject with lone surrogates can be searched in UTF mode', () => {
-    const s = 'a\uD800bb';
-    assert.throws(() => pcre2.match('b+', s, FLAGS.UTF));
-    const r = pcre2.match('b+', s, FLAGS.MATCH_INVALID_UTF);
-    assert.deepEqual([r.index, r.match], [2, 'bb']);
+  /* JS strings always reach PCRE2 as valid UTF-8, so only the implied UTF is observable. */
+  it('MATCH_INVALID_UTF implies UTF', () => {
+    assert.equal(pcre2.match('.', 'é', FLAGS.MATCH_INVALID_UTF).match, 'é');
   });
 });
 

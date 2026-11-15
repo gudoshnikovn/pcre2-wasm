@@ -36,7 +36,7 @@ export const FLAGS = {
   NEVER_UCP:          0x00000800,  // Forbid (*UCP) in the pattern
   NEVER_UTF:          0x00001000,  // Forbid (*UTF) in the pattern
   NEVER_BACKSLASH_C:  0x00100000,  // Forbid \C (a single code unit) in the pattern
-  MATCH_INVALID_UTF:  0x04000000,  // Subject may contain invalid UTF-8; enables UTF
+  MATCH_INVALID_UTF:  0x04000000,  // Accept invalid UTF-8 in the subject; enables UTF. JS strings are always valid
   USE_OFFSET_LIMIT:   0x00800000,  // Required for MatchOptions.offsetLimit
 };
 

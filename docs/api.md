@@ -450,31 +450,31 @@ pcre2.patternInfo('(?P<year>\\d{4})-(\\w)\\1');
 
 Compile-time flags. Pass as the `flags` argument to any method or to `parseFlags()`.
 
-| Constant                    | Description                                                              |
-| --------------------------- | ------------------------------------------------------------------------ |
-| `FLAGS.CASELESS`            | Case-insensitive matching (`(?i)`)                                       |
-| `FLAGS.MULTILINE`           | `^`/`$` match at line boundaries (`(?m)`)                                |
-| `FLAGS.DOTALL`              | `.` matches any character including newline (`(?s)`)                     |
-| `FLAGS.EXTENDED`            | Ignore unescaped whitespace in pattern (`(?x)`)                          |
-| `FLAGS.UTF`                 | Treat pattern and subject as UTF-8                                       |
-| `FLAGS.UCP`                 | Unicode properties for `\d`, `\w`, `\s`, `\b`; enables UTF               |
-| `FLAGS.ANCHORED`            | Match only at the start of the subject                                   |
-| `FLAGS.ENDANCHORED`         | Match only at the end of the subject                                     |
-| `FLAGS.UNGREEDY`            | Invert greediness of all quantifiers (`(?U)`)                            |
-| `FLAGS.NO_AUTO_CAPTURE`     | Plain `()` do not capture; use `(?:)` or named groups (`(?n)`)           |
-| `FLAGS.DUPNAMES`            | Allow duplicate named groups                                             |
-| `FLAGS.DOLLAR_ENDONLY`      | `$` matches only at the absolute end of the string                       |
-| `FLAGS.ALLOW_EMPTY_CLASS`   | Allow `[]` as an empty character class that never matches                |
-| `FLAGS.ALT_BSUX`            | JavaScript-style `\uHHHH` and `\xHH` escapes; disables `\x{…}`           |
-| `FLAGS.LITERAL`             | Treat the entire pattern as a literal string                             |
-| `FLAGS.ALT_EXTENDED_CLASS`  | Enable extended character class syntax `[[ ]]`                           |
-| `FLAGS.FIRSTLINE`           | The match must start before or at the first newline                      |
-| `FLAGS.MATCH_UNSET_BACKREF` | A backreference to an unset group matches `""`, as in JavaScript         |
-| `FLAGS.NEVER_UTF`           | Forbid `(*UTF)` in the pattern (for untrusted patterns)                  |
-| `FLAGS.NEVER_UCP`           | Forbid `(*UCP)` in the pattern (for untrusted patterns)                  |
-| `FLAGS.NEVER_BACKSLASH_C`   | Forbid `\C` (a single code unit) in the pattern                          |
-| `FLAGS.USE_OFFSET_LIMIT`    | Required for `options.offsetLimit`                                       |
-| `FLAGS.MATCH_INVALID_UTF`   | The subject may contain invalid UTF-8, e.g. lone surrogates; implies UTF |
+| Constant                    | Description                                                                          |
+| --------------------------- | ------------------------------------------------------------------------------------ |
+| `FLAGS.CASELESS`            | Case-insensitive matching (`(?i)`)                                                   |
+| `FLAGS.MULTILINE`           | `^`/`$` match at line boundaries (`(?m)`)                                            |
+| `FLAGS.DOTALL`              | `.` matches any character including newline (`(?s)`)                                 |
+| `FLAGS.EXTENDED`            | Ignore unescaped whitespace in pattern (`(?x)`)                                      |
+| `FLAGS.UTF`                 | Treat pattern and subject as UTF-8                                                   |
+| `FLAGS.UCP`                 | Unicode properties for `\d`, `\w`, `\s`, `\b`; enables UTF                           |
+| `FLAGS.ANCHORED`            | Match only at the start of the subject                                               |
+| `FLAGS.ENDANCHORED`         | Match only at the end of the subject                                                 |
+| `FLAGS.UNGREEDY`            | Invert greediness of all quantifiers (`(?U)`)                                        |
+| `FLAGS.NO_AUTO_CAPTURE`     | Plain `()` do not capture; use `(?:)` or named groups (`(?n)`)                       |
+| `FLAGS.DUPNAMES`            | Allow duplicate named groups                                                         |
+| `FLAGS.DOLLAR_ENDONLY`      | `$` matches only at the absolute end of the string                                   |
+| `FLAGS.ALLOW_EMPTY_CLASS`   | Allow `[]` as an empty character class that never matches                            |
+| `FLAGS.ALT_BSUX`            | JavaScript-style `\uHHHH` and `\xHH` escapes; disables `\x{…}`                       |
+| `FLAGS.LITERAL`             | Treat the entire pattern as a literal string                                         |
+| `FLAGS.ALT_EXTENDED_CLASS`  | Enable extended character class syntax `[[ ]]`                                       |
+| `FLAGS.FIRSTLINE`           | The match must start before or at the first newline                                  |
+| `FLAGS.MATCH_UNSET_BACKREF` | A backreference to an unset group matches `""`, as in JavaScript                     |
+| `FLAGS.NEVER_UTF`           | Forbid `(*UTF)` in the pattern (for untrusted patterns)                              |
+| `FLAGS.NEVER_UCP`           | Forbid `(*UCP)` in the pattern (for untrusted patterns)                              |
+| `FLAGS.NEVER_BACKSLASH_C`   | Forbid `\C` (a single code unit) in the pattern                                      |
+| `FLAGS.USE_OFFSET_LIMIT`    | Required for `options.offsetLimit`                                                   |
+| `FLAGS.MATCH_INVALID_UTF`   | Accept invalid UTF-8 in the subject; implies UTF (JS strings are always valid UTF-8) |
 
 > **Non-ASCII text needs `FLAGS.UTF`.** Strings are passed to PCRE2 as UTF-8, but without
 > `FLAGS.UTF` (or `FLAGS.UCP`, which implies it) PCRE2 treats every byte as a separate character.

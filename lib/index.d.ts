@@ -146,7 +146,7 @@ export declare const FLAGS: {
   readonly NEVER_UTF: 0x00001000;
   /** Forbid \\C (match a single code unit) in the pattern. */
   readonly NEVER_BACKSLASH_C: 0x00100000;
-  /** The subject may contain invalid UTF-8 (e.g. lone surrogates); implies UTF. */
+  /** Accept invalid UTF-8 in the subject; implies UTF. Strings from JS always reach PCRE2 as valid UTF-8 (lone surrogates become U+FFFD), so this is rarely needed. */
   readonly MATCH_INVALID_UTF: 0x04000000;
   /** Required to use MatchOptions.offsetLimit with this pattern. */
   readonly USE_OFFSET_LIMIT: 0x00800000;

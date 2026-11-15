@@ -9,7 +9,7 @@
     `MATCH_FLAGS.ENDANCHORED`.
   - `FLAGS.FIRSTLINE`, `FLAGS.MATCH_UNSET_BACKREF` (JS-style backreferences to unset groups),
     `FLAGS.NEVER_UTF`, `FLAGS.NEVER_UCP` and `FLAGS.NEVER_BACKSLASH_C` (for untrusted patterns),
-    `FLAGS.MATCH_INVALID_UTF` (search subjects with lone surrogates in UTF mode).
+    `FLAGS.MATCH_INVALID_UTF`.
   - `EXTRA_FLAGS.ALT_BSUX` (ECMAScript 6 `\u{…}`), `EXTRA_FLAGS.BAD_ESCAPE_IS_LITERAL`,
     `EXTRA_FLAGS.ASCII_POSIX` and `EXTRA_FLAGS.ASCII_DIGIT`.
   - `REPLACE_FLAGS.REPLACEMENT_ONLY` (return only the replacements).
@@ -18,6 +18,9 @@
 
 ### Bug fixes
 
+- Lone surrogates (e.g. `'\uD800'`) in a pattern, subject or replacement become one U+FFFD, as
+  with `TextEncoder` and `String.prototype.toWellFormed()`. Before, they were encoded as invalid
+  UTF-8: `replace()` turned each one into three U+FFFD and `FLAGS.UTF` threw a UTF-8 error.
 - `matchAll()`, `count()` and `matchAllIterator()` no longer loop forever when `\K` in a
   lookbehind (with `EXTRA_FLAGS.ALLOW_LOOKAROUND_BSK`) gives a match that ends where the search
   started: `matchAll('(?<=\\Ka)', 'aaa')` failed with `result too large` and the iterator never

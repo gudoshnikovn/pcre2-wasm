@@ -12,9 +12,12 @@ const _decoder = new TextDecoder();
  * Caller must _free the returned ptr.
  */
 export function strToWasm(m, s) {
+  /* TextEncoder writes a lone surrogate as U+FFFD (valid UTF-8); stringToUTF8 would
+     write invalid bytes. Both take 3 bytes, so lengthBytesUTF8 gives the size. */
   const len = m.lengthBytesUTF8(s);
   const ptr = m._malloc(len + 1);
-  m.stringToUTF8(s, ptr, len + 1);
+  _encoder.encodeInto(s, m.HEAPU8.subarray(ptr, ptr + len));
+  m.HEAPU8[ptr + len] = 0;
   return { ptr, len };
 }
 

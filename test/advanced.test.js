@@ -162,3 +162,32 @@ describe('split()', () => {
     assert.deepEqual(pcre2.split('', 'abc', 1), ['a', 'bc']);
   });
 });
+
+/* ── Lone surrogates ────────────────────────────────────────────────────── */
+
+/* UTF-8 cannot encode a lone surrogate; like TextEncoder and toWellFormed(),
+   each one becomes a single U+FFFD, so lengths and offsets stay as in JS. */
+describe('lone surrogates', () => {
+  const s = 'a\uD800b\uDFFFc';
+  const wellFormed = 'a�b�c';
+
+  it('replace keeps the rest of the subject, one U+FFFD per surrogate', () => {
+    assert.equal(pcre2.replaceAll('[bc]', s, 'X'), 'a�X�X');
+  });
+
+  it('match text and indexes', () => {
+    const r = pcre2.matchAll('.', s, FLAGS.UTF);
+    assert.deepEqual(
+      r.map((m) => [m.index, m.match]),
+      [...wellFormed].map((ch, i) => [i, ch]),
+    );
+  });
+
+  it('UTF mode does not reject the subject', () => {
+    assert.equal(pcre2.match('c', s, FLAGS.UTF).index, 4);
+  });
+
+  it('a lone surrogate in the pattern means U+FFFD', () => {
+    assert.equal(pcre2.test('a\uD800b', wellFormed, FLAGS.UTF), true);
+  });
+});
