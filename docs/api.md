@@ -400,8 +400,9 @@ interface PCRE2Match {
 }
 ```
 
-`groups` and `namedGroups` entries are `null` when the corresponding optional group did not
-participate in the match.
+`groups` has one entry per capture group of the pattern. `groups` and `namedGroups` entries are
+`null` when the corresponding optional group did not participate in the match, and all of them
+are `null` on a partial match.
 
 ```js
 pcre2.match('(?P<a>x)?(?P<b>y)', 'y');

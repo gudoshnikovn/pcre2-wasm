@@ -94,6 +94,10 @@ describe('split()', () => {
     assert.deepEqual(pcre2.split(',', 'a,b,c'), ['a', 'b', 'c']);
   });
 
+  it('unmatched trailing groups are included, as in JS split', () => {
+    assert.deepEqual(pcre2.split('(a)|(b)', 'xaybz'), 'xaybz'.split(/(a)|(b)/));
+  });
+
   it('split by regex with optional whitespace', () => {
     assert.deepEqual(pcre2.split('\\s*,\\s*', 'one , two , three'), ['one', 'two', 'three']);
   });

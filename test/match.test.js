@@ -109,6 +109,22 @@ describe('match() named capture groups', () => {
 /* ── matchAll() ─────────────────────────────────────────────────────────── */
 
 describe('matchAll()', () => {
+  it('groups has an entry for every capture group, null when unset', () => {
+    assert.deepEqual(
+      pcre2.matchAll('(a)|(b)', 'ab').map((m) => m.groups),
+      [
+        ['a', null],
+        [null, 'b'],
+      ],
+    );
+  });
+
+  it('groups are all null on a partial match', () => {
+    const r = pcre2.match('(\\d)x', '2', 0, { matchFlags: MATCH_FLAGS.PARTIAL_HARD });
+    assert.equal(r.partial, true);
+    assert.deepEqual(r.groups, [null]);
+  });
+
   it('returns array of match objects', () => {
     const r = pcre2.matchAll('\\d+', 'abc 123 def 456');
     assert.equal(r.length, 2);

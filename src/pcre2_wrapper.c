@@ -58,6 +58,7 @@ static void jb_string(JsonBuf* b, const char* src, uint32_t len) {
 /* ── Name-table cache ───────────────────────────────────────────────────── */
 
 typedef struct {
+    uint32_t     capture_count;
     uint32_t     namecount;
     uint32_t     entry_size;   /* bytes per entry                           */
     PCRE2_SPTR   table;        /* points into compiled code; not owned      */
@@ -67,6 +68,7 @@ static void nt_load(pcre2_code* re, NameTable* nt) {
     nt->namecount  = 0;
     nt->entry_size = 0;
     nt->table      = NULL;
+    pcre2_pattern_info(re, PCRE2_INFO_CAPTURECOUNT,  &nt->capture_count);
     pcre2_pattern_info(re, PCRE2_INFO_NAMECOUNT,     &nt->namecount);
     if (nt->namecount == 0) return;
     pcre2_pattern_info(re, PCRE2_INFO_NAMEENTRYSIZE, &nt->entry_size);
@@ -88,11 +90,12 @@ static void jb_match_object(JsonBuf* b, const char* subject,
     jb_lit(b, ",\"index\":");
     jb_uint(b, (uint32_t)ov[0]);
 
-    /* ,"groups":[...] — numbered capture groups, starting at 1 */
+    /* ,"groups":[...] — every capture group, starting at 1. rc is one more than
+       the highest group that is set, so groups >= rc are unset. */
     jb_lit(b, ",\"groups\":[");
-    for (int i = 1; i < rc; i++) {
+    for (uint32_t i = 1; i <= nt->capture_count; i++) {
         if (i > 1) jb_char(b, ',');
-        if (ov[2*i] == PCRE2_UNSET) {
+        if (i >= (uint32_t)rc || ov[2*i] == PCRE2_UNSET) {
             jb_lit(b, "null");
         } else {
             jb_string(b, subject + ov[2*i], (uint32_t)(ov[2*i+1] - ov[2*i]));

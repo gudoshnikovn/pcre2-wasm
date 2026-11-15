@@ -12,6 +12,9 @@
 - On a partial match, `namedGroups` entries are `null`. Before, `matchAll()` showed values left
   from the previous match and `match()` read uninitialised memory, often failing with
   `result too large`.
+- `groups` has an entry for every capture group. Unset groups after the last one that matched
+  were left out, so `matchAll('(a)|(b)', 'a')` gave `groups: ['a']` instead of `['a', null]`
+  and `split()` differed from JS. On a partial match `groups` is all `null` (was `[]`).
 
 ## 10.49.2
 
