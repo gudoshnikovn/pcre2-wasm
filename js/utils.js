@@ -86,20 +86,27 @@ export function throwIfMatchError(m, rc) {
 }
 
 /*
- * Call fn(buf, size) repeatedly, quadrupling the buffer on WASM_BUF_OVERFLOW.
+ * Call fn(buf, size) repeatedly, growing the buffer on WASM_BUF_OVERFLOW to
+ * nextSize(size) — by default four times larger.
  * Returns { rc, text } where text is read(buf, rc) — by default the
  * null-terminated string written by fn.
  * Any rc other than WASM_BUF_OVERFLOW — including error codes — is returned
  * as-is; the caller is responsible for checking it.
  */
-export function withBuffer(m, initialSize, fn, read = (buf) => m.UTF8ToString(buf)) {
+export function withBuffer(
+  m,
+  initialSize,
+  fn,
+  read = (buf) => m.UTF8ToString(buf),
+  nextSize = (size) => size * 4,
+) {
   let size = initialSize;
   for (let attempt = 0; attempt < 8; attempt++) {
     const buf = m._malloc(size);
     const rc = fn(buf, size);
     if (rc === WASM_BUF_OVERFLOW) {
       m._free(buf);
-      size *= 4;
+      size = nextSize(size);
       continue;
     }
     const text = read(buf, rc);

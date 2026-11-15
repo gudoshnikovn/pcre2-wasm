@@ -199,6 +199,11 @@ describe('large inputs', () => {
     const r = pcre2.matchAll('a', subject);
     assert.equal(r.length, 1_000);
   });
+
+  it('replaceAll result far larger than the initial buffer', () => {
+    const out = pcre2.replaceAll('a', 'a'.repeat(1_000), 'é'.repeat(1_000));
+    assert.equal(out, 'é'.repeat(1_000_000));
+  });
 });
 
 /* ── matchAll() — zero-length match + UTF-8 bug fix ────────────────────── */

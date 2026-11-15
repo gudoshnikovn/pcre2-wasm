@@ -377,7 +377,8 @@ int pcre2_wasm_match_all(pcre2_code* re, const char* subject, uint32_t subject_l
  * Returns:
  *   >= 0               number of substitutions; out_buf contains the result string and
  *                      *out_len_ptr its length in bytes (the result may contain NUL bytes)
- *   WASM_BUF_OVERFLOW  out_buf too small — retry with a larger buffer
+ *   WASM_BUF_OVERFLOW  out_buf too small — *out_len_ptr is the buffer size needed
+ *                      (PCRE2_SUBSTITUTE_OVERFLOW_LENGTH, including the NUL)
  *   other negative     PCRE2 error
  */
 EMSCRIPTEN_KEEPALIVE
@@ -413,7 +414,7 @@ int pcre2_wasm_replace(pcre2_code* re, const char* subject, uint32_t subject_len
     );
 
     if (mctx) pcre2_match_context_free(mctx);
-    if (rc >= 0 && out_len_ptr) *out_len_ptr = (uint32_t)out_len;
+    if ((rc >= 0 || rc == PCRE2_ERROR_NOMEMORY) && out_len_ptr) *out_len_ptr = (uint32_t)out_len;
     return (rc == PCRE2_ERROR_NOMEMORY) ? WASM_BUF_OVERFLOW : rc;
 }
 

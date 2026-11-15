@@ -376,6 +376,8 @@ export class PCRE2Regex {
           ),
         /* Read by length: the result may contain NUL bytes. */
         (buf, rc) => (rc >= 0 ? wasmToStr(m, buf, m.getValue(outLenPtr, 'i32') >>> 0) : ''),
+        /* On overflow PCRE2 reports the exact size needed. */
+        () => m.getValue(outLenPtr, 'i32') >>> 0,
       );
       throwIfMatchError(m, rc);
       return text;
