@@ -9,6 +9,9 @@
   started: `matchAll('(?<=\\Ka)', 'aaa')` failed with `result too large` and the iterator never
   ended. Global matching now uses PCRE2's own `pcre2_next_match()` instead of a hand-written
   copy of its rule (thanks to @nllyy, #1).
+- On a partial match, `namedGroups` entries are `null`. Before, `matchAll()` showed values left
+  from the previous match and `match()` read uninitialised memory, often failing with
+  `result too large`.
 
 ## 10.49.2
 

@@ -116,15 +116,15 @@ static void jb_match_object(JsonBuf* b, const char* subject,
             /* The table is sorted by name, so with DUPNAMES all groups sharing a
                name are adjacent. Emit the name once, using the first of its
                groups that is set (as pcre2_substring_get_byname does).
-               gn is a valid index into ov even if >= rc: create_from_pattern
-               allocates enough slots and fills them with PCRE2_UNSET */
+               Only the first rc pairs of ov are set: after a partial match
+               (rc = 1) the rest hold stale or uninitialised values. */
             PCRE2_SIZE gs = PCRE2_UNSET, ge = PCRE2_UNSET;
             for (; ni < nt->namecount; ni++) {
                 const unsigned char* d =
                     (const unsigned char*)((const char*)nt->table + ni * nt->entry_size);
                 if (strcmp((const char*)(d + 2), name) != 0) break;
                 uint32_t gn = ((uint32_t)d[0] << 8) | d[1];
-                if (gs == PCRE2_UNSET && ov[2*gn] != PCRE2_UNSET) {
+                if (gs == PCRE2_UNSET && gn < (uint32_t)rc && ov[2*gn] != PCRE2_UNSET) {
                     gs = ov[2*gn];
                     ge = ov[2*gn+1];
                 }

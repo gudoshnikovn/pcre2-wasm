@@ -193,6 +193,21 @@ describe('MATCH_FLAGS', () => {
     assert.equal(results[0].partial, true);
   });
 
+  /* After a partial match PCRE2 sets only the whole-match offsets. */
+  it('partial match: named groups are null in match()', () => {
+    const r = pcre2.match('(?<n>\\d)x', '2', 0, { matchFlags: MATCH_FLAGS.PARTIAL_HARD });
+    assert.equal(r.partial, true);
+    assert.deepEqual(r.namedGroups, { n: null });
+  });
+
+  it('partial match: named groups are null in matchAll(), not left from the previous match', () => {
+    const r = pcre2.matchAll('(?<n>\\d)x', '1x2', 0, { matchFlags: MATCH_FLAGS.PARTIAL_HARD });
+    assert.deepEqual(
+      r.map((m) => m.namedGroups),
+      [{ n: '1' }, { n: null }],
+    );
+  });
+
   it('NOTBOL + NOTEOL combined with startPos for streaming', () => {
     // Simulate processing a chunk that is the middle of a larger string.
     // Pattern ^\w+ should not match because chunk is not at BOL.
