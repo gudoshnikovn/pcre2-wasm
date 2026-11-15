@@ -210,6 +210,9 @@ PCRE2 is not the JS regex engine, and this library follows PCRE2 where the two d
 - **`split(subject, limit)`.** `limit` is the maximum number of splits (as in Python), not of
   result elements.
 - **Flag letters** follow PCRE/PHP: `U` is ungreedy, not Unicode.
+- **Lone surrogates** (e.g. `'\uD800'`) cannot be encoded in UTF-8, so each one becomes U+FFFD,
+  as with `TextEncoder`: `replace()` returns `'�'` in its place. Lengths and indexes stay
+  the same.
 
 ---
 
