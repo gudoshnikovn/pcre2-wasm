@@ -343,6 +343,7 @@ interface MatchOptions {
   matchLimit?: number; // max backtracking steps (0 = no extra limit)
   depthLimit?: number; // max backtracking stack depth (0 = no extra limit)
   startPos?: number; // character offset to start matching from (default 0)
+  offsetLimit?: number; // character offset a match must start at or before (needs FLAGS.USE_OFFSET_LIMIT)
   matchFlags?: number; // bitwise OR of MATCH_FLAGS constants
   replaceFlags?: number; // bitwise OR of REPLACE_FLAGS constants (replace/replaceAll only)
 }
@@ -366,6 +367,17 @@ correct `^`/`$`/`\b` behaviour when combined with `MATCH_FLAGS.NOTBOL`/`NOTEOL`.
 ```js
 pcre2.match('\\d+', 'abc 123', 0, { startPos: 4 });
 // { match: '123', index: 4, groups: [] }
+```
+
+### `offsetLimit`
+
+Character offset a match must start at or before: the search, `matchAll()`, `count()` and
+`replaceAll()` stop there instead of scanning the rest of the subject. The pattern must be
+compiled with `FLAGS.USE_OFFSET_LIMIT`, otherwise matching throws `PCRE2MatchError`.
+
+```js
+pcre2.replaceAll('\\d', '1 2 3', 'X', FLAGS.USE_OFFSET_LIMIT, { offsetLimit: 2 });
+// 'X X 3'
 ```
 
 ### `matchFlags`
@@ -461,6 +473,7 @@ Compile-time flags. Pass as the `flags` argument to any method or to `parseFlags
 | `FLAGS.NEVER_UTF`           | Forbid `(*UTF)` in the pattern (for untrusted patterns)                  |
 | `FLAGS.NEVER_UCP`           | Forbid `(*UCP)` in the pattern (for untrusted patterns)                  |
 | `FLAGS.NEVER_BACKSLASH_C`   | Forbid `\C` (a single code unit) in the pattern                          |
+| `FLAGS.USE_OFFSET_LIMIT`    | Required for `options.offsetLimit`                                       |
 | `FLAGS.MATCH_INVALID_UTF`   | The subject may contain invalid UTF-8, e.g. lone surrogates; implies UTF |
 
 > **Non-ASCII text needs `FLAGS.UTF`.** Strings are passed to PCRE2 as UTF-8, but without

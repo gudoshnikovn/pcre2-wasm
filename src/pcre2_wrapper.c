@@ -148,16 +148,22 @@ static void jb_match_object(JsonBuf* b, const char* subject,
 
 /* ── Match context helper ───────────────────────────────────────────────── */
 
+/* offset_limit value meaning "no offset limit" (PCRE2_UNSET). */
+#define NO_OFFSET_LIMIT UINT32_MAX
+
 /*
- * Creates a match context with the given limits, or returns NULL if both
- * limits are 0 (no context needed — PCRE2 uses its built-in defaults).
+ * Creates a match context with the given limits, or returns NULL if none is
+ * set (no context needed — PCRE2 uses its built-in defaults). match_limit and
+ * depth_limit: 0 = default; offset_limit: NO_OFFSET_LIMIT = none.
  */
-static pcre2_match_context* make_mctx(uint32_t match_limit, uint32_t depth_limit) {
-    if (match_limit == 0 && depth_limit == 0) return NULL;
+static pcre2_match_context* make_mctx(uint32_t match_limit, uint32_t depth_limit,
+                                      uint32_t offset_limit) {
+    if (match_limit == 0 && depth_limit == 0 && offset_limit == NO_OFFSET_LIMIT) return NULL;
     pcre2_match_context* ctx = pcre2_match_context_create(NULL);
     if (!ctx) return NULL;
     if (match_limit > 0) pcre2_set_match_limit(ctx, match_limit);
     if (depth_limit > 0) pcre2_set_depth_limit(ctx, depth_limit);
+    if (offset_limit != NO_OFFSET_LIMIT) pcre2_set_offset_limit(ctx, (PCRE2_SIZE)offset_limit);
     return ctx;
 }
 
@@ -228,6 +234,8 @@ int pcre2_wasm_error_message(int errcode, char* buf, uint32_t bufsize) {
  *   other negative     PCRE2 error (e.g. matchlimit, depthlimit)
  *
  * match_limit / depth_limit: 0 means use PCRE2 built-in defaults (no cap).
+ * offset_limit: byte offset a match must start at or before (pattern compiled
+ * with PCRE2_USE_OFFSET_LIMIT), or NO_OFFSET_LIMIT.
  *
  * JSON format: {"match":"...","index":N,"groups":[...],"namedGroups":{...}}
  * namedGroups is omitted when the pattern has no named groups.
@@ -235,7 +243,7 @@ int pcre2_wasm_error_message(int errcode, char* buf, uint32_t bufsize) {
 EMSCRIPTEN_KEEPALIVE
 int pcre2_wasm_match(pcre2_code* re, const char* subject, uint32_t subject_len,
                      char* match_buf, uint32_t match_buf_size,
-                     uint32_t match_limit, uint32_t depth_limit,
+                     uint32_t match_limit, uint32_t depth_limit, uint32_t offset_limit,
                      uint32_t start_offset, uint32_t match_flags,
                      uint32_t next_options, uint32_t* next_out) {
     if (!re || !subject) return -1;
@@ -243,7 +251,7 @@ int pcre2_wasm_match(pcre2_code* re, const char* subject, uint32_t subject_len,
     pcre2_match_data* md = pcre2_match_data_create_from_pattern(re, NULL);
     if (!md) return -48;
 
-    pcre2_match_context* mctx = make_mctx(match_limit, depth_limit);
+    pcre2_match_context* mctx = make_mctx(match_limit, depth_limit, offset_limit);
     int rc = pcre2_match(re, (PCRE2_SPTR)subject, (PCRE2_SIZE)subject_len,
                          (PCRE2_SIZE)start_offset, match_flags | next_options, md, mctx);
     if (mctx) pcre2_match_context_free(mctx);
@@ -285,6 +293,8 @@ int pcre2_wasm_match(pcre2_code* re, const char* subject, uint32_t subject_len,
  *   other negative     PCRE2 error (e.g. -47 matchlimit, -53 depthlimit)
  *
  * match_limit / depth_limit: 0 means use PCRE2 built-in defaults (no cap).
+ * offset_limit: byte offset a match must start at or before (pattern compiled
+ * with PCRE2_USE_OFFSET_LIMIT), or NO_OFFSET_LIMIT.
  * Passing match_buf=0 / match_buf_size=0 is valid: counts matches without
  * writing JSON (used by test()).
  *
@@ -293,7 +303,7 @@ int pcre2_wasm_match(pcre2_code* re, const char* subject, uint32_t subject_len,
 EMSCRIPTEN_KEEPALIVE
 int pcre2_wasm_match_all(pcre2_code* re, const char* subject, uint32_t subject_len,
                           char* match_buf, uint32_t match_buf_size,
-                          uint32_t match_limit, uint32_t depth_limit,
+                          uint32_t match_limit, uint32_t depth_limit, uint32_t offset_limit,
                           uint32_t start_offset, uint32_t match_flags) {
     if (!re || !subject) return -1;
 
@@ -301,7 +311,7 @@ int pcre2_wasm_match_all(pcre2_code* re, const char* subject, uint32_t subject_l
     pcre2_match_data* md = pcre2_match_data_create_from_pattern(re, NULL);
     if (!md) return -48;
 
-    pcre2_match_context* mctx = make_mctx(match_limit, depth_limit);
+    pcre2_match_context* mctx = make_mctx(match_limit, depth_limit, offset_limit);
 
     int write_json = (match_buf != NULL && match_buf_size > 2);
     NameTable nt;
@@ -378,6 +388,8 @@ int pcre2_wasm_match_all(pcre2_code* re, const char* subject, uint32_t subject_l
  * ${name} = named group, $$ = literal dollar.
  *
  * match_limit / depth_limit: 0 means use PCRE2 built-in defaults (no cap).
+ * offset_limit: byte offset a match must start at or before (pattern compiled
+ * with PCRE2_USE_OFFSET_LIMIT), or NO_OFFSET_LIMIT.
  *
  * Returns:
  *   >= 0               number of substitutions; out_buf contains the result string and
@@ -391,12 +403,12 @@ int pcre2_wasm_replace(pcre2_code* re, const char* subject, uint32_t subject_len
                         const char* replacement, uint32_t replacement_len,
                         int global,
                         char* out_buf, uint32_t out_buf_size, uint32_t* out_len_ptr,
-                        uint32_t match_limit, uint32_t depth_limit,
+                        uint32_t match_limit, uint32_t depth_limit, uint32_t offset_limit,
                         uint32_t start_offset, uint32_t match_flags,
                         uint32_t replace_flags) {
     if (!re || !subject || !replacement || !out_buf) return -1;
 
-    pcre2_match_context* mctx = make_mctx(match_limit, depth_limit);
+    pcre2_match_context* mctx = make_mctx(match_limit, depth_limit, offset_limit);
 
     PCRE2_SIZE out_len = (PCRE2_SIZE)out_buf_size;
     /* PCRE2_SUBSTITUTE_UNSET_EMPTY is always on: unmatched groups → "" (JS-compatible).

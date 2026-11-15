@@ -65,6 +65,14 @@ export function charOffsetToByteOffset(str, charOffset) {
   return _encoder.encode(str.slice(0, charOffset)).length;
 }
 
+/* Sentinel for "no offset limit" — must match NO_OFFSET_LIMIT in C. */
+const NO_OFFSET_LIMIT = 0xffffffff;
+
+/* Convert MatchOptions.offsetLimit (a character offset, or undefined) for C. */
+export function offsetLimitToBytes(str, offsetLimit) {
+  return offsetLimit === undefined ? NO_OFFSET_LIMIT : charOffsetToByteOffset(str, offsetLimit);
+}
+
 /*
  * Throw a PCRE2MatchError for real PCRE2 errors (rc < -2, e.g. matchlimit, depthlimit).
  * rc ≥ -1 (success/no match), rc = -2 (partial), and WASM_BUF_OVERFLOW are not errors —

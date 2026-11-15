@@ -8,6 +8,7 @@ import {
   REPLACE_FLAGS,
   EXTRA_FLAGS,
   PCRE2CompileError,
+  PCRE2MatchError,
 } from '../lib/index.js';
 
 let pcre2;
@@ -131,5 +132,44 @@ describe('REPLACE_FLAGS.REPLACEMENT_ONLY', () => {
     const opts = { replaceFlags: REPLACE_FLAGS.REPLACEMENT_ONLY };
     assert.equal(pcre2.replaceAll('(\\d+)', 'a1 b22 c3', '<$1>', 0, opts), '<1><22><3>');
     assert.equal(pcre2.replace('(\\d+)', 'a1 b22', '<$1>', 0, opts), '<1>');
+  });
+});
+
+/* ── offsetLimit (FLAGS.USE_OFFSET_LIMIT) ───────────────────────────────── */
+
+describe('offsetLimit', () => {
+  const F = FLAGS.USE_OFFSET_LIMIT;
+
+  it('a match must start at or before offsetLimit', () => {
+    assert.equal(pcre2.match('abc', '123abc', F, { offsetLimit: 2 }), null);
+    assert.equal(pcre2.match('abc', '123abc', F, { offsetLimit: 3 }).index, 3);
+    assert.equal(pcre2.test('abc', '123abc', F, { offsetLimit: 2 }), false);
+  });
+
+  it('0 is a limit, not "no limit"', () => {
+    assert.equal(pcre2.match('\\d', 'a1', F, { offsetLimit: 0 }), null);
+  });
+
+  it('limits global matching and substitution', () => {
+    const opts = { offsetLimit: 2 };
+    assert.deepEqual(
+      pcre2.matchAll('\\d', '1 2 3', F, opts).map((m) => m.match),
+      ['1', '2'],
+    );
+    assert.equal(pcre2.count('\\d', '1 2 3', F, opts), 2);
+    const re = pcre2.compile('\\d', F);
+    assert.deepEqual(
+      [...re.matchAllIterator('1 2 3', opts)].map((m) => m.match),
+      ['1', '2'],
+    );
+    assert.equal(pcre2.replaceAll('\\d', '1 2 3', 'X', F, opts), 'X X 3');
+  });
+
+  it('is a character offset, like startPos', () => {
+    assert.equal(pcre2.match('\\d', 'éé1', F | FLAGS.UTF, { offsetLimit: 2 }).index, 2);
+  });
+
+  it('without FLAGS.USE_OFFSET_LIMIT throws', () => {
+    assert.throws(() => pcre2.match('abc', '123abc', 0, { offsetLimit: 3 }), PCRE2MatchError);
   });
 });

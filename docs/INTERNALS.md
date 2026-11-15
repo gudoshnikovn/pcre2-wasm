@@ -100,7 +100,7 @@ Both `pcre2_wasm_match` and `pcre2_wasm_match_all` write into a buffer pre-alloc
 
 ### Match limits
 
-`match_limit` and `depth_limit` parameters are forwarded to a `pcre2_match_context`. Both default to 0 (PCRE2 built-in defaults, effectively unlimited). Pass non-zero values to cap backtracking and recursion depth — essential for ReDoS protection when running user-supplied patterns.
+`match_limit` and `depth_limit` parameters are forwarded to a `pcre2_match_context`. Both default to 0 (PCRE2 built-in defaults, effectively unlimited). Pass non-zero values to cap backtracking and recursion depth — essential for ReDoS protection when running user-supplied patterns. `offset_limit` (a byte offset, `UINT32_MAX` = none) goes to `pcre2_set_offset_limit`; JS converts `options.offsetLimit` from characters.
 
 ### Empty matches in global matching
 

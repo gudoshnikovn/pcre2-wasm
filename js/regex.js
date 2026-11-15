@@ -3,6 +3,7 @@ import {
   byteOffsetToCharOffset,
   byteToCharOffsetConverter,
   charOffsetToByteOffset,
+  offsetLimitToBytes,
   throwIfMatchError,
   withBuffer,
   wasmToStr,
@@ -53,7 +54,10 @@ export class PCRE2Regex {
   }
 
   /* Returns true if the pattern matches anywhere in subject. */
-  test(subject, { matchLimit = 0, depthLimit = 0, startPos = 0, matchFlags = 0 } = {}) {
+  test(
+    subject,
+    { matchLimit = 0, depthLimit = 0, offsetLimit, startPos = 0, matchFlags = 0 } = {},
+  ) {
     this.#assertAlive();
     const m = this.#mod;
     const { ptr: subjectPtr, len: subjectLen } = strToWasm(m, subject);
@@ -62,6 +66,7 @@ export class PCRE2Regex {
       'pcre2_wasm_match',
       'number',
       [
+        'number',
         'number',
         'number',
         'number',
@@ -82,6 +87,7 @@ export class PCRE2Regex {
         0,
         matchLimit,
         depthLimit,
+        offsetLimitToBytes(subject, offsetLimit),
         startByte,
         matchFlags,
         0,
@@ -103,7 +109,8 @@ export class PCRE2Regex {
     const { ptr: subjectPtr, len: subjectLen } = strToWasm(m, subject);
     try {
       const startByte = charOffsetToByteOffset(subject, opts.startPos ?? 0);
-      const result = this.#matchBytes(subjectPtr, subjectLen, startByte, opts, 0, 0);
+      const limitByte = offsetLimitToBytes(subject, opts.offsetLimit);
+      const result = this.#matchBytes(subjectPtr, subjectLen, startByte, limitByte, opts, 0, 0);
       if (result) result.index = byteOffsetToCharOffset(subject, result.index);
       return result;
     } finally {
@@ -113,7 +120,7 @@ export class PCRE2Regex {
 
   /*
    * Runs pcre2_wasm_match on a subject already in WASM memory. Returns the parsed
-   * match with index as a byte offset, or null. nextOptions are ORed into
+   * match with index as a byte offset, or null. limitByte: offsetLimitToBytes(). nextOptions are ORed into
    * matchFlags. nextPtr, if not 0, receives pcre2_next_match()'s verdict on the
    * next search as three u32: continue (0/1), start offset, nextOptions.
    */
@@ -121,6 +128,7 @@ export class PCRE2Regex {
     subjectPtr,
     subjectLen,
     startByte,
+    limitByte,
     { matchLimit = 0, depthLimit = 0, matchFlags = 0 },
     nextOptions,
     nextPtr,
@@ -143,6 +151,7 @@ export class PCRE2Regex {
           'number',
           'number',
           'number',
+          'number',
         ],
         [
           this.#ptr,
@@ -152,6 +161,7 @@ export class PCRE2Regex {
           size,
           matchLimit,
           depthLimit,
+          limitByte,
           startByte,
           matchFlags,
           nextOptions,
@@ -186,9 +196,18 @@ export class PCRE2Regex {
     try {
       const toCharOffset = byteToCharOffsetConverter(subject);
       let startByte = charOffsetToByteOffset(subject, opts.startPos ?? 0);
+      const limitByte = offsetLimitToBytes(subject, opts.offsetLimit);
       let nextOptions = 0;
       while (true) {
-        const r = this.#matchBytes(subjectPtr, subjectLen, startByte, opts, nextOptions, nextPtr);
+        const r = this.#matchBytes(
+          subjectPtr,
+          subjectLen,
+          startByte,
+          limitByte,
+          opts,
+          nextOptions,
+          nextPtr,
+        );
         if (!r) break;
         const more = m.getValue(nextPtr, 'i32') !== 0;
         startByte = m.getValue(nextPtr + 4, 'i32') >>> 0;
@@ -205,7 +224,10 @@ export class PCRE2Regex {
   }
 
   /* Returns all non-overlapping matches as an array of match objects. */
-  matchAll(subject, { matchLimit = 0, depthLimit = 0, startPos = 0, matchFlags = 0 } = {}) {
+  matchAll(
+    subject,
+    { matchLimit = 0, depthLimit = 0, offsetLimit, startPos = 0, matchFlags = 0 } = {},
+  ) {
     this.#assertAlive();
     const m = this.#mod;
     const { ptr: subjectPtr, len: subjectLen } = strToWasm(m, subject);
@@ -225,6 +247,7 @@ export class PCRE2Regex {
             'number',
             'number',
             'number',
+            'number',
           ],
           [
             this.#ptr,
@@ -234,6 +257,7 @@ export class PCRE2Regex {
             size,
             matchLimit,
             depthLimit,
+            offsetLimitToBytes(subject, offsetLimit),
             startByte,
             matchFlags,
           ],
@@ -250,7 +274,10 @@ export class PCRE2Regex {
   }
 
   /* Returns the number of non-overlapping matches without allocating results. */
-  count(subject, { matchLimit = 0, depthLimit = 0, startPos = 0, matchFlags = 0 } = {}) {
+  count(
+    subject,
+    { matchLimit = 0, depthLimit = 0, offsetLimit, startPos = 0, matchFlags = 0 } = {},
+  ) {
     this.#assertAlive();
     const m = this.#mod;
     const { ptr: subjectPtr, len: subjectLen } = strToWasm(m, subject);
@@ -258,8 +285,30 @@ export class PCRE2Regex {
     const rc = m.ccall(
       'pcre2_wasm_match_all',
       'number',
-      ['number', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number'],
-      [this.#ptr, subjectPtr, subjectLen, 0, 0, matchLimit, depthLimit, startByte, matchFlags],
+      [
+        'number',
+        'number',
+        'number',
+        'number',
+        'number',
+        'number',
+        'number',
+        'number',
+        'number',
+        'number',
+      ],
+      [
+        this.#ptr,
+        subjectPtr,
+        subjectLen,
+        0,
+        0,
+        matchLimit,
+        depthLimit,
+        offsetLimitToBytes(subject, offsetLimit),
+        startByte,
+        matchFlags,
+      ],
     );
     m._free(subjectPtr);
     throwIfMatchError(m, rc);
@@ -318,7 +367,14 @@ export class PCRE2Regex {
     subject,
     replacement,
     global,
-    { matchLimit = 0, depthLimit = 0, startPos = 0, matchFlags = 0, replaceFlags = 0 } = {},
+    {
+      matchLimit = 0,
+      depthLimit = 0,
+      offsetLimit,
+      startPos = 0,
+      matchFlags = 0,
+      replaceFlags = 0,
+    } = {},
   ) {
     this.#assertAlive();
     const m = this.#mod;
@@ -356,6 +412,7 @@ export class PCRE2Regex {
               'number',
               'number',
               'number',
+              'number',
             ],
             [
               this.#ptr,
@@ -369,6 +426,7 @@ export class PCRE2Regex {
               outLenPtr,
               matchLimit,
               depthLimit,
+              offsetLimitToBytes(subject, offsetLimit),
               startByte,
               matchFlags,
               replaceFlags,

@@ -13,6 +13,8 @@
   - `EXTRA_FLAGS.ALT_BSUX` (ECMAScript 6 `\u{…}`), `EXTRA_FLAGS.BAD_ESCAPE_IS_LITERAL`,
     `EXTRA_FLAGS.ASCII_POSIX` and `EXTRA_FLAGS.ASCII_DIGIT`.
   - `REPLACE_FLAGS.REPLACEMENT_ONLY` (return only the replacements).
+- `options.offsetLimit` with `FLAGS.USE_OFFSET_LIMIT`: a match must start at or before this
+  character offset, so a search, `matchAll()`, `count()` or `replaceAll()` stops there.
 
 ### Bug fixes
 

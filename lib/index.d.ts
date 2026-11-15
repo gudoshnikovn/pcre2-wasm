@@ -39,6 +39,12 @@ export interface MatchOptions {
    */
   startPos?: number;
   /**
+   * Character offset a match must start at or before; the search stops there
+   * (also for matchAll(), count() and replaceAll()). Default: no limit.
+   * The pattern must be compiled with FLAGS.USE_OFFSET_LIMIT, otherwise matching throws.
+   */
+  offsetLimit?: number;
+  /**
    * Bitwise OR of MATCH_FLAGS constants (NOTBOL, NOTEOL, NOTEMPTY, PARTIAL_SOFT, etc.).
    * These are passed directly to pcre2_match / pcre2_substitute at match time.
    */
@@ -142,6 +148,8 @@ export declare const FLAGS: {
   readonly NEVER_BACKSLASH_C: 0x00100000;
   /** The subject may contain invalid UTF-8 (e.g. lone surrogates); implies UTF. */
   readonly MATCH_INVALID_UTF: 0x04000000;
+  /** Required to use MatchOptions.offsetLimit with this pattern. */
+  readonly USE_OFFSET_LIMIT: 0x00800000;
 };
 
 /**

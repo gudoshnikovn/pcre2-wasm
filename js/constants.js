@@ -37,6 +37,7 @@ export const FLAGS = {
   NEVER_UTF:          0x00001000,  // Forbid (*UTF) in the pattern
   NEVER_BACKSLASH_C:  0x00100000,  // Forbid \C (a single code unit) in the pattern
   MATCH_INVALID_UTF:  0x04000000,  // Subject may contain invalid UTF-8; enables UTF
+  USE_OFFSET_LIMIT:   0x00800000,  // Required for MatchOptions.offsetLimit
 };
 
 /*
